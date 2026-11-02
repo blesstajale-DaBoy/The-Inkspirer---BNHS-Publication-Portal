@@ -11,6 +11,7 @@ import { ArticleReaderModal } from './components/ArticleReaderModal';
 import { SubmitStoryModal } from './components/SubmitStoryModal';
 import { DownloadPortalModal } from './components/DownloadPortalModal';
 import { EditorialDeskModal } from './components/EditorialDeskModal';
+import { ReadLaterNotification } from './components/ReadLaterNotification';
 import { Footer } from './components/Footer';
 
 export default function App() {
@@ -20,9 +21,13 @@ export default function App() {
     submissions,
     staff,
     categories,
+    authorProfiles,
     bookmarks,
+    readingProgressMap,
     likedArticles,
     toggleBookmark,
+    updateArticleReadingProgress,
+    markArticleAsRead,
     toggleLike,
     incrementView,
     addSubmission,
@@ -32,11 +37,18 @@ export default function App() {
     updateArticle,
     deleteArticle,
     addAnnouncement,
+    updateAnnouncement,
     deleteAnnouncement,
     togglePinAnnouncement,
     addCategory,
     updateCategory,
     deleteCategory,
+    addStaffMember,
+    updateStaffMember,
+    deleteStaffMember,
+    addAuthorProfile,
+    updateAuthorProfile,
+    deleteAuthorProfile,
     resetToDefaults,
   } = useInkspirerStore();
 
@@ -51,6 +63,19 @@ export default function App() {
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
   const [isEditorialDeskOpen, setIsEditorialDeskOpen] = useState(false);
+  const [editorialDeskInitialTab, setEditorialDeskInitialTab] = useState<
+    'submissions' | 'compose' | 'articles' | 'announcements' | 'categories' | 'staff' | 'author-bios' | 'adviser' | 'subscribers' | undefined
+  >(undefined);
+
+  // Keep open article synchronized with live store updates (e.g. author bio updates)
+  const activeSelectedArticle = useMemo(() => {
+    if (!selectedArticle) return null;
+    return articles.find((a) => a.id === selectedArticle.id) || selectedArticle;
+  }, [selectedArticle, articles]);
+
+  const isAnnouncementsMenu =
+    activeCategory.toLowerCase() === 'announcements' ||
+    activeCategory.toLowerCase() === 'announcement';
 
   // Filtered and Sorted Articles
   const filteredArticles = useMemo(() => {
@@ -61,8 +86,11 @@ export default function App() {
           return false;
         }
 
-        // Category filter
-        if (activeCategory !== 'All' && art.category !== activeCategory) {
+        // Category filter (case-insensitive)
+        if (
+          activeCategory !== 'All' &&
+          art.category.toLowerCase() !== activeCategory.toLowerCase()
+        ) {
           return false;
         }
 
@@ -90,7 +118,7 @@ export default function App() {
 
   // Lead story calculation
   const leadStory = useMemo(() => {
-    if (showingBookmarksOnly || searchQuery.trim() || activeCategory === 'Announcements') {
+    if (showingBookmarksOnly || searchQuery.trim() || isAnnouncementsMenu) {
       return null;
     }
     // Check if an article is flagged leadStory in current category
@@ -102,7 +130,7 @@ export default function App() {
       return filteredArticles[0] || null;
     }
     return null;
-  }, [filteredArticles, showingBookmarksOnly, searchQuery, activeCategory]);
+  }, [filteredArticles, showingBookmarksOnly, searchQuery, activeCategory, isAnnouncementsMenu]);
 
   // Remaining articles excluding lead story
   const gridArticles = useMemo(() => {
@@ -158,7 +186,10 @@ export default function App() {
       />
 
       {/* Campus Announcements Bulletin Ticker */}
-      <CampusBulletin announcements={announcements} />
+      <CampusBulletin
+        announcements={announcements}
+        onUpdateAnnouncement={updateAnnouncement}
+      />
 
       {/* Authentic School Publication Masthead */}
       <Masthead
@@ -169,6 +200,12 @@ export default function App() {
         bookmarksCount={bookmarks.length}
         onFilterBookmarks={() => setShowingBookmarksOnly((prev) => !prev)}
         showingBookmarks={showingBookmarksOnly}
+        activeCategory={activeCategory}
+        onSelectCategory={(cat) => {
+          setActiveCategory(cat);
+          setShowingBookmarksOnly(false);
+        }}
+        categories={categories}
       />
 
       {/* Main Content Area */}
@@ -185,7 +222,7 @@ export default function App() {
           sortBy={sortBy}
           onSortChange={setSortBy}
           totalStoriesCount={
-            activeCategory === 'Announcements'
+            isAnnouncementsMenu
               ? announcements.length
               : filteredArticles.length
           }
@@ -202,6 +239,7 @@ export default function App() {
             onToggleBookmark={handleToggleBookmarkClick}
             isLiked={likedArticles.includes(leadStory.id)}
             onToggleLike={handleToggleLikeClick}
+            authorProfiles={authorProfiles}
           />
         )}
 
@@ -219,6 +257,8 @@ export default function App() {
           onOpenSubmit={() => setIsSubmitOpen(true)}
           onResetFilters={handleResetFilters}
           showingBookmarks={showingBookmarksOnly}
+          onUpdateAnnouncement={updateAnnouncement}
+          authorProfiles={authorProfiles}
         />
       </main>
 
@@ -237,12 +277,38 @@ export default function App() {
 
       {/* Reader Modal */}
       <ArticleReaderModal
-        article={selectedArticle}
+        article={activeSelectedArticle}
         onClose={() => setSelectedArticle(null)}
-        isBookmarked={selectedArticle ? bookmarks.includes(selectedArticle.id) : false}
+        isBookmarked={activeSelectedArticle ? bookmarks.includes(activeSelectedArticle.id) : false}
         onToggleBookmark={handleToggleBookmarkClick}
-        isLiked={selectedArticle ? likedArticles.includes(selectedArticle.id) : false}
+        isLiked={activeSelectedArticle ? likedArticles.includes(activeSelectedArticle.id) : false}
         onToggleLike={handleToggleLikeClick}
+        savedProgress={activeSelectedArticle ? readingProgressMap[activeSelectedArticle.id] ?? 0 : 0}
+        onUpdateReadingProgress={updateArticleReadingProgress}
+        authorProfiles={authorProfiles}
+        articles={articles}
+        onSelectArticle={handleSelectArticle}
+        onUpdateAuthorProfile={updateAuthorProfile}
+        onAddAuthorProfile={addAuthorProfile}
+        onOpenEditorialDeskAuthorTab={() => {
+          setSelectedArticle(null);
+          setEditorialDeskInitialTab('author-bios');
+          setIsEditorialDeskOpen(true);
+        }}
+      />
+
+      {/* Local-Storage Based Read-Later Catch-Up Notification System */}
+      <ReadLaterNotification
+        articles={articles}
+        bookmarks={bookmarks}
+        readingProgressMap={readingProgressMap}
+        onSelectArticle={handleSelectArticle}
+        onMarkAsRead={markArticleAsRead}
+        onRemoveBookmark={handleToggleBookmarkClick}
+        onViewAllBookmarks={() => {
+          setShowingBookmarksOnly(true);
+          scrollToStories();
+        }}
       />
 
       {/* Submit Story Modal (Dual action: Download .txt and/or Save to Editorial Desk) */}
@@ -266,23 +332,35 @@ export default function App() {
       {/* Editorial Desk / Adviser Management Console */}
       <EditorialDeskModal
         isOpen={isEditorialDeskOpen}
-        onClose={() => setIsEditorialDeskOpen(false)}
+        onClose={() => {
+          setIsEditorialDeskOpen(false);
+          setEditorialDeskInitialTab(undefined);
+        }}
         articles={articles}
         announcements={announcements}
         submissions={submissions}
         staff={staff}
         categories={categories}
+        authorProfiles={authorProfiles}
+        initialTab={editorialDeskInitialTab}
         onPublishSubmission={publishSubmissionAsArticle}
         onUpdateSubmissionStatus={updateSubmissionStatus}
         onCreateArticle={createArticle}
         onUpdateArticle={updateArticle}
         onDeleteArticle={deleteArticle}
         onAddAnnouncement={addAnnouncement}
+        onUpdateAnnouncement={updateAnnouncement}
         onDeleteAnnouncement={deleteAnnouncement}
         onTogglePinAnnouncement={togglePinAnnouncement}
         onAddCategory={addCategory}
         onUpdateCategory={updateCategory}
         onDeleteCategory={deleteCategory}
+        onAddStaffMember={addStaffMember}
+        onUpdateStaffMember={updateStaffMember}
+        onDeleteStaffMember={deleteStaffMember}
+        onAddAuthorProfile={addAuthorProfile}
+        onUpdateAuthorProfile={updateAuthorProfile}
+        onDeleteAuthorProfile={deleteAuthorProfile}
         onResetDefaults={resetToDefaults}
       />
     </div>

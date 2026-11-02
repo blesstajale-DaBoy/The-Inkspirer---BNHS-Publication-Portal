@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowRight, Bookmark, Heart, Eye } from 'lucide-react';
-import { Article } from '../types';
+import { Article, StudentAuthorProfile } from '../types';
 import { EditorialArtwork } from './EditorialArtwork';
 import { AuthorProfile } from './AuthorProfile';
 
@@ -11,6 +11,7 @@ interface LeadStoryProps {
   onToggleBookmark: (id: string, e: React.MouseEvent) => void;
   isLiked: boolean;
   onToggleLike: (id: string, e: React.MouseEvent) => void;
+  authorProfiles?: StudentAuthorProfile[];
 }
 
 export const LeadStory: React.FC<LeadStoryProps> = ({
@@ -20,7 +21,14 @@ export const LeadStory: React.FC<LeadStoryProps> = ({
   onToggleBookmark,
   isLiked,
   onToggleLike,
+  authorProfiles = [],
 }) => {
+  const matchedProfile =
+    authorProfiles.find(
+      (p) =>
+        (article.authorProfileId && p.id === article.authorProfileId) ||
+        p.name.trim().toLowerCase() === article.author.trim().toLowerCase()
+    ) || null;
   // Calculate dynamic reading time based on content length
   const contentString = Array.isArray(article.content) ? article.content.join(' ') : (article.content || '');
   const totalWords = `${article.title || ''} ${article.deck || ''} ${contentString} ${article.pullQuote || ''}`
@@ -100,6 +108,9 @@ export const LeadStory: React.FC<LeadStoryProps> = ({
                   author={article.author}
                   role={article.authorRole}
                   bio={article.authorBio}
+                  photoUrl={article.authorPhotoUrl}
+                  gradeSection={article.authorGradeSection}
+                  profile={matchedProfile}
                   variant="card"
                 />
               </div>

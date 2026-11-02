@@ -31,7 +31,20 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string, name: string, role?: UserRole) => Promise<void>;
-  loginAsAdviserDemo: () => void;
+  loginAsAdviserDemo: (customAdviser?: {
+    name?: string;
+    email?: string;
+    designation?: string;
+    department?: string;
+    photoUrl?: string | null;
+  }) => void;
+  updateActiveAdviserSession: (adviser: {
+    name: string;
+    email: string;
+    designation: string;
+    department: string;
+    photoUrl?: string | null;
+  }) => void;
   loginAsEditorDemo: () => void;
   logout: () => Promise<void>;
   isAuthorizedStaff: boolean;
@@ -41,6 +54,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEMO_STORAGE_KEY = 'the_inkspirer_demo_auth_v1';
+const ACTIVE_ADVISER_STORAGE_KEY = 'the_inkspirer_active_adviser_v1';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -171,19 +185,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Quick 1-Click login for Publication Adviser
-  const loginAsAdviserDemo = () => {
+  // Quick 1-Click login for the Active Publication Adviser
+  const loginAsAdviserDemo = (customAdviser?: {
+    name?: string;
+    email?: string;
+    designation?: string;
+    department?: string;
+    photoUrl?: string | null;
+  }) => {
+    let storedAdviser: {
+      name?: string;
+      email?: string;
+      designation?: string;
+      department?: string;
+      photoUrl?: string | null;
+    } | null = null;
+    try {
+      const raw = localStorage.getItem(ACTIVE_ADVISER_STORAGE_KEY);
+      if (raw) storedAdviser = JSON.parse(raw);
+    } catch {
+      // ignore
+    }
+
+    const activeName = customAdviser?.name || storedAdviser?.name || 'Mrs. Maria Elena V. Delos Reyes';
+    const activeEmail = customAdviser?.email || storedAdviser?.email || 'm.reyes@bnhs.deped.edu.ph';
+    const activeDesignation =
+      customAdviser?.designation ||
+      storedAdviser?.designation ||
+      'School Publication Adviser · Master Teacher II';
+    const activeDepartment =
+      customAdviser?.department ||
+      storedAdviser?.department ||
+      'English Dept. & Editorial Consultant';
+    const activePhoto = customAdviser?.photoUrl ?? storedAdviser?.photoUrl ?? null;
+
     const adviserProfile: AuthUserProfile = {
-      uid: 'adviser-maria-reyes-bnhs',
-      email: 'm.reyes@bnhs.deped.edu.ph',
-      displayName: 'Mrs. Maria Elena V. Delos Reyes',
+      uid: `adviser-${activeName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      email: activeEmail,
+      displayName: activeName,
       role: 'adviser',
-      designation: 'School Publication Adviser · Master Teacher II',
-      department: 'English Dept. & Editorial Consultant',
-      photoURL: null,
+      designation: activeDesignation,
+      department: activeDepartment,
+      photoURL: activePhoto,
     };
     setUserProfile(adviserProfile);
     localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(adviserProfile));
+  };
+
+  const updateActiveAdviserSession = (adviser: {
+    name: string;
+    email: string;
+    designation: string;
+    department: string;
+    photoUrl?: string | null;
+  }) => {
+    if (userProfile?.role === 'adviser') {
+      const updatedProfile: AuthUserProfile = {
+        uid: `adviser-${adviser.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        email: adviser.email,
+        displayName: adviser.name,
+        role: 'adviser',
+        designation: adviser.designation,
+        department: adviser.department,
+        photoURL: adviser.photoUrl ?? null,
+      };
+      setUserProfile(updatedProfile);
+      localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(updatedProfile));
+    }
   };
 
   // Quick 1-Click login for Student Editor-in-Chief
@@ -228,6 +296,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithEmail,
         registerWithEmail,
         loginAsAdviserDemo,
+        updateActiveAdviserSession,
         loginAsEditorDemo,
         logout,
         isAuthorizedStaff,

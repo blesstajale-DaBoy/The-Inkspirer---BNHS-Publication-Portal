@@ -1,6 +1,6 @@
 import React from 'react';
 import { Bookmark, Heart, ArrowUpRight, Clock } from 'lucide-react';
-import { Article } from '../types';
+import { Article, StudentAuthorProfile } from '../types';
 import { EditorialArtwork } from './EditorialArtwork';
 import { AuthorProfile } from './AuthorProfile';
 
@@ -11,6 +11,7 @@ interface StoryCardProps {
   onToggleBookmark: (id: string, e: React.MouseEvent) => void;
   isLiked: boolean;
   onToggleLike: (id: string, e: React.MouseEvent) => void;
+  authorProfile?: StudentAuthorProfile | null;
 }
 
 export const StoryCard: React.FC<StoryCardProps> = ({
@@ -20,6 +21,7 @@ export const StoryCard: React.FC<StoryCardProps> = ({
   onToggleBookmark,
   isLiked,
   onToggleLike,
+  authorProfile = null,
 }) => {
   return (
     <article
@@ -111,6 +113,9 @@ export const StoryCard: React.FC<StoryCardProps> = ({
               author={article.author}
               role={article.authorRole}
               bio={article.authorBio}
+              photoUrl={article.authorPhotoUrl}
+              gradeSection={article.authorGradeSection}
+              profile={authorProfile}
               variant="card"
             />
           </div>

@@ -1,4 +1,101 @@
-import { Article, Announcement, StorySubmission, EditorialMember, PublicationCategory } from '../types';
+import { Article, Announcement, StorySubmission, EditorialMember, PublicationCategory, StudentAuthorProfile } from '../types';
+
+export const INITIAL_AUTHOR_PROFILES: StudentAuthorProfile[] = [
+  {
+    id: 'author-1',
+    name: 'John Cedric Morales',
+    role: 'Editor-in-Chief',
+    gradeSection: 'Grade 12 HUMSS - Rizal',
+    beat: 'News & Investigative Reporting',
+    bio: 'Grade 12 HUMSS student, NSPC qualifier, and senior investigative reporter covering school governance, regional press meets, and educational policy at Barobo National High School.',
+    journalismMotto: 'Our pens carry not just ink, but the authentic lived realities and triumphs of Barobo scholars.',
+    accolades: [
+      'NSPC 2026 National Qualifier — News Writing',
+      '1st Place Collaborative Desktop Publishing — RSPC Caraga',
+      'Outstanding Campus Editor Award — Division of Surigao del Sur',
+    ],
+    avatarSeed: 'editor-in-chief',
+    email: 'j.morales@bnhs.deped.edu.ph',
+    joinedYear: 'SY 2023–2024',
+  },
+  {
+    id: 'author-2',
+    name: 'Angela Bea S. Claros',
+    role: 'Associate Editor',
+    gradeSection: 'Grade 11 STEM - Emerald',
+    beat: 'Features & Science-Environment Desk',
+    bio: 'Grade 11 STEM learner, regional feature and editorial writing champion, and environmental researcher documenting coastal biodiversity and student innovation across Surigao del Sur.',
+    journalismMotto: 'Science and human stories belong in the hands of our coastal communities.',
+    accolades: [
+      '1st Place Editorial Writing (English) — RSPC 2026',
+      '1st Place Science & Health Feature — DSPC Surigao del Sur',
+    ],
+    avatarSeed: 'assoc-editor',
+    email: 'a.claros@bnhs.deped.edu.ph',
+    joinedYear: 'SY 2024–2025',
+  },
+  {
+    id: 'author-3',
+    name: 'Mark Anthony Pimentel',
+    role: 'Sports Editor',
+    gradeSection: 'Grade 12 TVL - ICT',
+    beat: 'Sports Coverage & Campus Athletics',
+    bio: 'Grade 12 TVL-ICT scholar, varsity track enthusiast, and sports journalist capturing the grit, heart, and sportsmanship of Barobo High’s Blue Marlins across provincial and regional meets.',
+    journalismMotto: 'Every final-second buzzer carries months of unseen sunrise discipline.',
+    accolades: [
+      '2nd Place Sports Writing (English) — RSPC 2026',
+      '1st Place Sports Reporting — DSPC Surigao del Sur',
+    ],
+    avatarSeed: 'sports-editor',
+    email: 'm.pimentel@bnhs.deped.edu.ph',
+    joinedYear: 'SY 2023–2024',
+  },
+  {
+    id: 'author-4',
+    name: 'Sophia Nicole Tandoc',
+    role: 'Chief Photojournalist & Feature Writer',
+    gradeSection: 'Grade 11 HUMSS - Bonifacio',
+    beat: 'Photojournalism & Human Interest Features',
+    bio: 'Grade 11 visual storyteller and feature writer dedicated to spotlighting peer mentorship, grassroots campus initiatives, and everyday faces of resilience in Barobo.',
+    journalismMotto: 'A single honest frame speaks for a thousand quiet sacrifices.',
+    accolades: [
+      '1st Place Photojournalism (English) — RSPC 2026',
+      'Best Human Interest Portfolio — Caraga Student Press Guild',
+    ],
+    avatarSeed: 'photo-editor',
+    email: 's.tandoc@bnhs.deped.edu.ph',
+    joinedYear: 'SY 2024–2025',
+  },
+  {
+    id: 'author-5',
+    name: 'Joshua David Alcantara',
+    role: 'Opinion & Editorial Writer',
+    gradeSection: 'Grade 10 - Diamond',
+    beat: 'Opinion, Columns & Civic Discourse',
+    bio: 'Grade 10 junior scribe, varsity debater, and opinion essayist advocating for student rights, critical media literacy, and campus press freedom under RA 7079.',
+    journalismMotto: 'Campus publications exist to train conscientious citizens who question, verify, and care.',
+    accolades: [
+      '1st Place Column Writing — DSPC Surigao del Sur',
+      'Best Speaker — BNHS Parliamentary Debate Cup',
+    ],
+    avatarSeed: 'opinion-editor',
+    email: 'j.alcantara@bnhs.deped.edu.ph',
+    joinedYear: 'SY 2025–2026',
+  },
+  {
+    id: 'author-6',
+    name: 'Charisse Joy Cabatingan',
+    role: 'Contributing Feature Writer',
+    gradeSection: 'Grade 11 HUMSS - Rizal',
+    beat: 'Campus Life & Community Profiles',
+    bio: 'Grade 11 HUMSS contributor passionate about telling the stories of unsung campus heroes, school staff, and everyday kindness at Barobo National High School.',
+    journalismMotto: 'Gratitude is best written in the stories of those who serve quietly.',
+    accolades: ['Finalist — BNHS Literary & Feature Folio 2026'],
+    avatarSeed: 'contributor-charisse',
+    email: 'charisse.cabatingan@bnhs.deped.edu.ph',
+    joinedYear: 'SY 2025–2026',
+  },
+];
 
 export const INITIAL_EDITORIAL_STAFF: EditorialMember[] = [
   {

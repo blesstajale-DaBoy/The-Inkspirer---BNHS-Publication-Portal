@@ -106,6 +106,25 @@
         "avatarUrl": { "type": "string" }
       },
       "required": ["email", "role"]
+    },
+    "StudentAuthorProfile": {
+      "title": "StudentAuthorProfile",
+      "description": "Author bio profile for a student journalist at Barobo National High School",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "maxLength": 128 },
+        "gradeSection": { "type": "string", "maxLength": 128 },
+        "beat": { "type": "string", "maxLength": 128 },
+        "bio": { "type": "string", "maxLength": 2048 },
+        "journalismMotto": { "type": "string", "maxLength": 512 },
+        "accolades": { "type": "array" },
+        "photoUrl": { "type": "string" },
+        "avatarSeed": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "joinedYear": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["name", "role", "bio"]
     }
   },
   "firestore": {
@@ -132,6 +151,10 @@
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profiles with publication roles"
+    },
+    "/authorProfiles/{profileId}": {
+      "schema": "StudentAuthorProfile",
+      "description": "Student journalist author bio profiles readable by everyone, managed in the Editorial Desk"
     }
   }
 }

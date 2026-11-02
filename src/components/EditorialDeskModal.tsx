@@ -42,9 +42,13 @@ import {
   Category,
   NewsletterSubscriber,
   PublicationCategory,
+  PortalAdviserConfig,
+  AdviserHandoverRecord,
+  StudentAuthorProfile,
 } from '../types';
 import { downloadSubmissionTextFile } from '../utils/exporter';
 import { useAuth } from '../context/AuthContext';
+import { AuthorBioManager } from './AuthorBioManager';
 
 // Curated preset palettes for categories
 const COLOR_PRESETS = [
@@ -120,17 +124,26 @@ interface EditorialDeskModalProps {
   submissions: StorySubmission[];
   staff: EditorialMember[];
   categories: PublicationCategory[];
+  authorProfiles?: StudentAuthorProfile[];
+  initialTab?: 'submissions' | 'compose' | 'articles' | 'announcements' | 'categories' | 'staff' | 'author-bios' | 'adviser' | 'subscribers';
   onPublishSubmission: (id: string) => Article | null;
   onUpdateSubmissionStatus: (id: string, status: StorySubmission['status'], feedback?: string) => void;
   onCreateArticle: (art: Omit<Article, 'id' | 'views' | 'likes'>) => Article;
   onUpdateArticle: (art: Article) => void;
   onDeleteArticle: (id: string) => void;
   onAddAnnouncement: (ann: Omit<Announcement, 'id'>) => Announcement;
+  onUpdateAnnouncement?: (id: string, updated: Partial<Announcement>) => void;
   onDeleteAnnouncement: (id: string) => void;
   onTogglePinAnnouncement: (id: string) => void;
   onAddCategory: (cat: Omit<PublicationCategory, 'id' | 'slug'>) => PublicationCategory;
   onUpdateCategory: (id: string, updated: Partial<PublicationCategory>) => void;
   onDeleteCategory: (id: string, fallbackCategoryName?: string) => void;
+  onAddStaffMember: (member: Omit<EditorialMember, 'id' | 'avatarSeed'>) => EditorialMember;
+  onUpdateStaffMember: (id: string, updated: Partial<EditorialMember>) => void;
+  onDeleteStaffMember: (id: string) => void;
+  onAddAuthorProfile?: (profile: Omit<StudentAuthorProfile, 'id'>) => StudentAuthorProfile;
+  onUpdateAuthorProfile?: (id: string, updated: Partial<StudentAuthorProfile>, previousName?: string) => void;
+  onDeleteAuthorProfile?: (id: string) => void;
   onResetDefaults: () => void;
 }
 
@@ -142,17 +155,26 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
   submissions,
   staff,
   categories,
+  authorProfiles = [],
+  initialTab,
   onPublishSubmission,
   onUpdateSubmissionStatus,
   onCreateArticle,
   onUpdateArticle,
   onDeleteArticle,
   onAddAnnouncement,
+  onUpdateAnnouncement,
   onDeleteAnnouncement,
   onTogglePinAnnouncement,
   onAddCategory,
   onUpdateCategory,
   onDeleteCategory,
+  onAddStaffMember,
+  onUpdateStaffMember,
+  onDeleteStaffMember,
+  onAddAuthorProfile,
+  onUpdateAuthorProfile,
+  onDeleteAuthorProfile,
   onResetDefaults,
 }) => {
   // Firebase Authentication & Role Management
@@ -161,6 +183,7 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
     userProfile,
     loginWithGoogle,
     loginAsAdviserDemo,
+    updateActiveAdviserSession,
     loginAsEditorDemo,
     logout,
     isAuthorizedStaff,
@@ -184,8 +207,14 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
   }, [userProfile]);
 
   // Active tab in management desk
-  const [activeTab, setActiveTab] = useState<'submissions' | 'compose' | 'articles' | 'announcements' | 'categories' | 'staff' | 'subscribers'>('submissions');
+  const [activeTab, setActiveTab] = useState<'submissions' | 'compose' | 'articles' | 'announcements' | 'categories' | 'staff' | 'author-bios' | 'adviser' | 'subscribers'>('submissions');
   const [subscribersList, setSubscribersList] = useState<NewsletterSubscriber[]>([]);
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   useEffect(() => {
     try {
@@ -209,6 +238,10 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
   const [composerCategory, setComposerCategory] = useState<Category>('News');
   const [composerAuthor, setComposerAuthor] = useState('John Cedric Morales');
   const [composerRole, setComposerRole] = useState('Editor-in-Chief');
+  const [composerAuthorGrade, setComposerAuthorGrade] = useState('Grade 12 HUMSS - Rizal');
+  const [composerAuthorBio, setComposerAuthorBio] = useState(
+    'Grade 12 HUMSS student, NSPC qualifier, and senior investigative reporter covering school governance, regional press meets, and educational policy at Barobo National High School.'
+  );
   const [composerLeadStory, setComposerLeadStory] = useState(false);
   const [composerFeatured, setComposerFeatured] = useState(false);
   const [composerPullQuote, setComposerPullQuote] = useState('');
@@ -224,6 +257,15 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
   const [annUrgent, setAnnUrgent] = useState(false);
   const [annContent, setAnnContent] = useState('');
 
+  // Editing Announcement / Academic Notice state
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [editAnnTitle, setEditAnnTitle] = useState('');
+  const [editAnnType, setEditAnnType] = useState<Announcement['type']>('Academic');
+  const [editAnnDeadline, setEditAnnDeadline] = useState('');
+  const [editAnnLocation, setEditAnnLocation] = useState('');
+  const [editAnnUrgent, setEditAnnUrgent] = useState(false);
+  const [editAnnContent, setEditAnnContent] = useState('');
+
   // Editing article form state
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -231,6 +273,8 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
   const [editCategory, setEditCategory] = useState<Category>('News');
   const [editAuthor, setEditAuthor] = useState('');
   const [editRole, setEditRole] = useState('');
+  const [editAuthorGrade, setEditAuthorGrade] = useState('');
+  const [editAuthorBio, setEditAuthorBio] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editPullQuote, setEditPullQuote] = useState('');
   const [editCaption, setEditCaption] = useState('');
@@ -264,11 +308,461 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
   const [editCatIcon, setEditCatIcon] = useState('newspaper');
   const [editCatImageUrl, setEditCatImageUrl] = useState('');
 
+  // Editorial Board & Masthead Roster management state
+  const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<EditorialMember | null>(null);
+  const [deletingStaff, setDeletingStaff] = useState<EditorialMember | null>(null);
+
+  // Add staff form
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffRole, setNewStaffRole] = useState('Associate Editor');
+  const [newStaffGrade, setNewStaffGrade] = useState('');
+  const [newStaffDept, setNewStaffDept] = useState('');
+  const [newStaffPhoto, setNewStaffPhoto] = useState('');
+
+  // Edit staff form
+  const [editStaffName, setEditStaffName] = useState('');
+  const [editStaffRole, setEditStaffRole] = useState('');
+  const [editStaffGrade, setEditStaffGrade] = useState('');
+  const [editStaffDept, setEditStaffDept] = useState('');
+  const [editStaffPhoto, setEditStaffPhoto] = useState('');
+
+  // Portal Adviser Management & Resignation / Succession state
+  const [activeAdviserConfig, setActiveAdviserConfig] = useState<PortalAdviserConfig>(() => {
+    try {
+      const stored = localStorage.getItem('the_inkspirer_active_adviser_v1');
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // ignore
+    }
+    return {
+      id: 'staff-1',
+      name: 'Mrs. Maria Elena V. Delos Reyes',
+      email: 'm.reyes@bnhs.deped.edu.ph',
+      role: 'School Publication Adviser',
+      designation: 'Master Teacher II - English Department',
+      department: 'Adviser & Editorial Consultant',
+      pinCode: '1991',
+      appointedDate: 'August 2024',
+    };
+  });
+
+  const [handoverHistory, setHandoverHistory] = useState<AdviserHandoverRecord[]>(() => {
+    try {
+      const stored = localStorage.getItem('the_inkspirer_adviser_handover_log_v1');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Sync active adviser name/details if edited in the staff roster
+  useEffect(() => {
+    const primaryInRoster =
+      staff.find((m) => m.id === activeAdviserConfig.id) ||
+      staff.find(
+        (m) =>
+          (m.role.toLowerCase().includes('adviser') || m.role.toLowerCase().includes('consultant')) &&
+          !m.role.toLowerCase().includes('former') &&
+          !m.role.toLowerCase().includes('emeritus') &&
+          !m.role.toLowerCase().includes('resigned')
+      );
+    if (primaryInRoster && primaryInRoster.name !== activeAdviserConfig.name && primaryInRoster.id === activeAdviserConfig.id) {
+      const synced: PortalAdviserConfig = {
+        ...activeAdviserConfig,
+        name: primaryInRoster.name,
+        role: primaryInRoster.role,
+        designation: primaryInRoster.gradeOrDesignation,
+        department: primaryInRoster.department,
+        photoUrl: primaryInRoster.photoUrl,
+      };
+      setActiveAdviserConfig(synced);
+      localStorage.setItem('the_inkspirer_active_adviser_v1', JSON.stringify(synced));
+    }
+  }, [staff]);
+
+  // Modals for Portal Adviser Resignation / Handover & Adding Portal Adviser
+  const [isResignModalOpen, setIsResignModalOpen] = useState(false);
+  const [isAddAdviserModalOpen, setIsAddAdviserModalOpen] = useState(false);
+  const [resignDisposition, setResignDisposition] = useState<'emeritus' | 'removed'>('emeritus');
+  const [successorMode, setSuccessorMode] = useState<'new' | 'existing'>('new');
+  const [selectedExistingSuccessorId, setSelectedExistingSuccessorId] = useState<string>('');
+  const [successorName, setSuccessorName] = useState('');
+  const [successorEmail, setSuccessorEmail] = useState('');
+  const [successorRole, setSuccessorRole] = useState('School Publication Adviser');
+  const [successorDesignation, setSuccessorDesignation] = useState('Master Teacher I - Filipino Department');
+  const [successorDepartment, setSuccessorDepartment] = useState('Adviser & Editorial Consultant');
+  const [successorPin, setSuccessorPin] = useState('1991');
+  const [successorPhoto, setSuccessorPhoto] = useState('');
+  const [resignReason, setResignReason] = useState(
+    'Official turnover of School Publication Advisership duties for The Inkspirer.'
+  );
+
+  // Add New Portal Adviser / Co-Adviser standalone form
+  const [newAdviserName, setNewAdviserName] = useState('');
+  const [newAdviserEmail, setNewAdviserEmail] = useState('');
+  const [newAdviserRole, setNewAdviserRole] = useState('Portal Publication Adviser');
+  const [newAdviserDesignation, setNewAdviserDesignation] = useState('Master Teacher I - English Department');
+  const [newAdviserDepartment, setNewAdviserDepartment] = useState('Adviser & Editorial Consultant');
+  const [newAdviserPin, setNewAdviserPin] = useState('1991');
+  const [newAdviserPhoto, setNewAdviserPhoto] = useState('');
+  const [makePrimaryAdviser, setMakePrimaryAdviser] = useState(true);
+
   if (!isOpen) return null;
 
   const showToast = (msg: string) => {
     setDeskToast(msg);
     setTimeout(() => setDeskToast(''), 3000);
+  };
+
+  const handleOpenAddStaff = () => {
+    setNewStaffName('');
+    setNewStaffRole('Staff Writer');
+    setNewStaffGrade('Grade 12 HUMSS');
+    setNewStaffDept('News & Public Affairs Desk');
+    setNewStaffPhoto('');
+    setIsAddStaffOpen(true);
+  };
+
+  const handleOpenAddPortalAdviser = () => {
+    setNewAdviserName('');
+    setNewAdviserEmail('');
+    setNewAdviserRole('School Publication Adviser');
+    setNewAdviserDesignation('Master Teacher I - English Department');
+    setNewAdviserDepartment('Adviser & Editorial Consultant');
+    setNewAdviserPin(activeAdviserConfig.pinCode || '1991');
+    setNewAdviserPhoto('');
+    setMakePrimaryAdviser(true);
+    setIsAddAdviserModalOpen(true);
+  };
+
+  const handleOpenResignModal = () => {
+    const nonAdviserStaff = staff.filter((m) => m.id !== activeAdviserConfig.id);
+    setSelectedExistingSuccessorId(nonAdviserStaff[0]?.id || '');
+    setSuccessorName('');
+    setSuccessorEmail('');
+    setSuccessorRole('School Publication Adviser');
+    setSuccessorDesignation('Master Teacher I - English / Filipino Department');
+    setSuccessorDepartment('Adviser & Editorial Consultant');
+    setSuccessorPin(activeAdviserConfig.pinCode || '1991');
+    setSuccessorPhoto('');
+    setResignDisposition('emeritus');
+    setSuccessorMode('new');
+    setIsResignModalOpen(true);
+  };
+
+  const handleCreatePortalAdviser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdviserName.trim()) return;
+
+    const createdMember = onAddStaffMember({
+      name: newAdviserName.trim(),
+      role: newAdviserRole.trim() || 'School Publication Adviser',
+      gradeOrDesignation: newAdviserDesignation.trim() || 'Faculty Adviser',
+      department: newAdviserDepartment.trim() || 'Adviser & Editorial Consultant',
+      photoUrl: newAdviserPhoto.trim() || undefined,
+      email: newAdviserEmail.trim() || `${newAdviserName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '.')}@bnhs.deped.edu.ph`,
+      isPrimaryAdviser: makePrimaryAdviser,
+      adviserStatus: 'active',
+    });
+
+    if (makePrimaryAdviser) {
+      const newConfig: PortalAdviserConfig = {
+        id: createdMember.id,
+        name: createdMember.name,
+        email:
+          newAdviserEmail.trim() ||
+          `${createdMember.name.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@bnhs.deped.edu.ph`,
+        role: createdMember.role,
+        designation: createdMember.gradeOrDesignation,
+        department: createdMember.department,
+        pinCode: newAdviserPin.trim() || '1991',
+        photoUrl: createdMember.photoUrl,
+        appointedDate: new Date().toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        }),
+      };
+      setActiveAdviserConfig(newConfig);
+      localStorage.setItem('the_inkspirer_active_adviser_v1', JSON.stringify(newConfig));
+      updateActiveAdviserSession({
+        name: newConfig.name,
+        email: newConfig.email,
+        designation: `${newConfig.role} · ${newConfig.designation}`,
+        department: newConfig.department,
+        photoUrl: newConfig.photoUrl || null,
+      });
+    }
+
+    setIsAddAdviserModalOpen(false);
+    showToast(
+      makePrimaryAdviser
+        ? `Appointed ${createdMember.name} as Active Portal Adviser!`
+        : `Added ${createdMember.name} as Portal Co-Adviser!`
+    );
+  };
+
+  const handleConfirmResignAndHandover = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const outgoingName = activeAdviserConfig.name;
+    const outgoingMember =
+      staff.find((m) => m.id === activeAdviserConfig.id) ||
+      staff.find((m) => m.name.toLowerCase() === outgoingName.toLowerCase());
+
+    // 1. Update or remove outgoing adviser from staff roster
+    const todayFormatted = new Date().toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    if (outgoingMember) {
+      if (resignDisposition === 'removed') {
+        onDeleteStaffMember(outgoingMember.id);
+      } else {
+        onUpdateStaffMember(outgoingMember.id, {
+          role: 'Former Publication Adviser (Emeritus)',
+          department: `Stepped Down / Emeritus (${todayFormatted})`,
+          isPrimaryAdviser: false,
+          adviserStatus: 'emeritus',
+          resignedDate: todayFormatted,
+        });
+      }
+    }
+
+    // 2. Appoint or promote the incoming Portal Adviser
+    let finalNewAdviser: PortalAdviserConfig;
+
+    if (successorMode === 'existing' && selectedExistingSuccessorId) {
+      const existingTarget = staff.find((m) => m.id === selectedExistingSuccessorId);
+      if (existingTarget) {
+        const updatedRole = successorRole.trim() || 'School Publication Adviser';
+        onUpdateStaffMember(existingTarget.id, {
+          role: updatedRole,
+          gradeOrDesignation: successorDesignation.trim() || existingTarget.gradeOrDesignation,
+          department: successorDepartment.trim() || 'Adviser & Editorial Consultant',
+          isPrimaryAdviser: true,
+          adviserStatus: 'active',
+        });
+
+        finalNewAdviser = {
+          id: existingTarget.id,
+          name: existingTarget.name,
+          email:
+            successorEmail.trim() ||
+            `${existingTarget.name.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@bnhs.deped.edu.ph`,
+          role: updatedRole,
+          designation: successorDesignation.trim() || existingTarget.gradeOrDesignation,
+          department: successorDepartment.trim() || 'Adviser & Editorial Consultant',
+          pinCode: successorPin.trim() || '1991',
+          photoUrl: existingTarget.photoUrl,
+          appointedDate: todayFormatted,
+        };
+      } else {
+        return;
+      }
+    } else {
+      if (!successorName.trim()) return;
+      const createdSuccessor = onAddStaffMember({
+        name: successorName.trim(),
+        role: successorRole.trim() || 'School Publication Adviser',
+        gradeOrDesignation: successorDesignation.trim() || 'Master Teacher / Faculty Adviser',
+        department: successorDepartment.trim() || 'Adviser & Editorial Consultant',
+        photoUrl: successorPhoto.trim() || undefined,
+        email:
+          successorEmail.trim() ||
+          `${successorName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '.')}@bnhs.deped.edu.ph`,
+        isPrimaryAdviser: true,
+        adviserStatus: 'active',
+      });
+
+      finalNewAdviser = {
+        id: createdSuccessor.id,
+        name: createdSuccessor.name,
+        email:
+          successorEmail.trim() ||
+          `${createdSuccessor.name.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@bnhs.deped.edu.ph`,
+        role: createdSuccessor.role,
+        designation: createdSuccessor.gradeOrDesignation,
+        department: createdSuccessor.department,
+        pinCode: successorPin.trim() || '1991',
+        photoUrl: createdSuccessor.photoUrl,
+        appointedDate: todayFormatted,
+      };
+    }
+
+    // 3. Persist new active Portal Adviser & update active session
+    setActiveAdviserConfig(finalNewAdviser);
+    localStorage.setItem('the_inkspirer_active_adviser_v1', JSON.stringify(finalNewAdviser));
+    updateActiveAdviserSession({
+      name: finalNewAdviser.name,
+      email: finalNewAdviser.email,
+      designation: `${finalNewAdviser.role} · ${finalNewAdviser.designation}`,
+      department: finalNewAdviser.department,
+      photoUrl: finalNewAdviser.photoUrl || null,
+    });
+
+    // 4. Record in official Adviser Handover & Resignation Log
+    const logRecord: AdviserHandoverRecord = {
+      id: `handover-${Date.now()}`,
+      previousAdviserName: outgoingName,
+      previousAdviserDisposition: resignDisposition,
+      newAdviserName: finalNewAdviser.name,
+      newAdviserDesignation: finalNewAdviser.designation,
+      handoverDate: todayFormatted,
+      reasonOrNote:
+        resignReason.trim() ||
+        'Resigned as Publication Adviser and transferred portal administration to successor.',
+    };
+
+    const updatedHistory = [logRecord, ...handoverHistory];
+    setHandoverHistory(updatedHistory);
+    localStorage.setItem('the_inkspirer_adviser_handover_log_v1', JSON.stringify(updatedHistory));
+
+    setIsResignModalOpen(false);
+    showToast(
+      `${outgoingName} resigned as Adviser. ${finalNewAdviser.name} is now the Active Portal Adviser!`
+    );
+  };
+
+  const handleSetMemberAsActiveAdviser = (member: EditorialMember) => {
+    const todayFormatted = new Date().toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const updatedRole = member.role.toLowerCase().includes('adviser')
+      ? member.role.replace(/former\s+|emeritus|\(emeritus\)/gi, '').trim() || 'School Publication Adviser'
+      : 'School Publication Adviser';
+
+    onUpdateStaffMember(member.id, {
+      role: updatedRole,
+      isPrimaryAdviser: true,
+      adviserStatus: 'active',
+    });
+
+    const newConfig: PortalAdviserConfig = {
+      id: member.id,
+      name: member.name,
+      email:
+        member.email ||
+        `${member.name.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@bnhs.deped.edu.ph`,
+      role: updatedRole,
+      designation: member.gradeOrDesignation,
+      department: member.department,
+      pinCode: activeAdviserConfig.pinCode || '1991',
+      photoUrl: member.photoUrl,
+      appointedDate: todayFormatted,
+    };
+
+    setActiveAdviserConfig(newConfig);
+    localStorage.setItem('the_inkspirer_active_adviser_v1', JSON.stringify(newConfig));
+    updateActiveAdviserSession({
+      name: newConfig.name,
+      email: newConfig.email,
+      designation: `${newConfig.role} · ${newConfig.designation}`,
+      department: newConfig.department,
+      photoUrl: newConfig.photoUrl || null,
+    });
+    showToast(`${member.name} is now set as the Active Portal Adviser!`);
+  };
+
+  const handleOpenEditAnnouncement = (ann: Announcement) => {
+    setEditingAnnouncement(ann);
+    setEditAnnTitle(ann.title);
+    setEditAnnType(ann.type);
+    setEditAnnDeadline(ann.deadline || '');
+    setEditAnnLocation(ann.location || '');
+    setEditAnnUrgent(Boolean(ann.urgent || ann.isPinned));
+    setEditAnnContent(ann.content);
+  };
+
+  const handleSaveEditAnnouncement = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAnnouncement) return;
+    if (!editAnnTitle.trim() || !editAnnContent.trim()) {
+      showToast('Please provide both a notice title and content.');
+      return;
+    }
+    const updates: Partial<Announcement> = {
+      title: editAnnTitle.trim(),
+      type: editAnnType,
+      deadline: editAnnDeadline.trim(),
+      location: editAnnLocation.trim(),
+      urgent: editAnnUrgent,
+      isPinned: editAnnUrgent,
+      content: editAnnContent.trim(),
+    };
+    onUpdateAnnouncement?.(editingAnnouncement.id, updates);
+    showToast(`Updated "${editAnnTitle.trim()}" (${editAnnType} Notice)!`);
+    setEditingAnnouncement(null);
+  };
+
+  const handleOpenEditStaff = (member: EditorialMember) => {
+    setEditingStaff(member);
+    setEditStaffName(member.name);
+    setEditStaffRole(member.role);
+    setEditStaffGrade(member.gradeOrDesignation);
+    setEditStaffDept(member.department);
+    setEditStaffPhoto(member.photoUrl || '');
+  };
+
+  const handleCreateStaffMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStaffName.trim() || !newStaffRole.trim()) {
+      return;
+    }
+    onAddStaffMember({
+      name: newStaffName.trim(),
+      role: newStaffRole.trim(),
+      gradeOrDesignation: newStaffGrade.trim() || 'Campus Journalist',
+      department: newStaffDept.trim() || 'The Inkspirer Editorial Board',
+      photoUrl: newStaffPhoto.trim() || undefined,
+    });
+    showToast(`Added ${newStaffName.trim()} to the Editorial Board Roster!`);
+    setIsAddStaffOpen(false);
+  };
+
+  const handleSaveEditStaffMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStaff || !editStaffName.trim() || !editStaffRole.trim()) {
+      return;
+    }
+    onUpdateStaffMember(editingStaff.id, {
+      name: editStaffName.trim(),
+      role: editStaffRole.trim(),
+      gradeOrDesignation: editStaffGrade.trim() || 'Campus Journalist',
+      department: editStaffDept.trim() || 'The Inkspirer Editorial Board',
+      photoUrl: editStaffPhoto.trim() || undefined,
+    });
+    showToast(`Updated ${editStaffName.trim()}'s profile in the Masthead Roster!`);
+    setEditingStaff(null);
+  };
+
+  const handleConfirmDeleteStaff = () => {
+    if (!deletingStaff) return;
+    onDeleteStaffMember(deletingStaff.id);
+    showToast(`Removed ${deletingStaff.name} from the Masthead Roster`);
+    setDeletingStaff(null);
+  };
+
+  const handleStaffPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          if (isEdit) {
+            setEditStaffPhoto(reader.result);
+          } else {
+            setNewStaffPhoto(reader.result);
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleOpenAddCategory = () => {
@@ -375,12 +869,23 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
   };
 
   const handleOpenEditArticle = (art: Article) => {
+    const matchedProf = authorProfiles.find(
+      (p) =>
+        (art.authorProfileId && p.id === art.authorProfileId) ||
+        p.name.trim().toLowerCase() === art.author.trim().toLowerCase()
+    );
     setEditingArticle(art);
     setEditTitle(art.title);
     setEditDeck(art.deck || '');
     setEditCategory(art.category);
     setEditAuthor(art.author);
-    setEditRole(art.authorRole || '');
+    setEditRole(art.authorRole || matchedProf?.role || '');
+    setEditAuthorGrade(art.authorGradeSection || matchedProf?.gradeSection || '');
+    setEditAuthorBio(
+      art.authorBio ||
+        matchedProf?.bio ||
+        `Student journalist at Barobo National High School writing for The Inkspirer.`
+    );
     setEditContent(Array.isArray(art.content) ? art.content.join('\n\n') : (art.content || ''));
     setEditPullQuote(art.pullQuote || '');
     setEditCaption(art.imageCaption || '');
@@ -405,7 +910,7 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
   const handleSaveEditedArticle = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingArticle || !editTitle.trim() || !editContent.trim()) {
-      alert('Please fill in headline and story content.');
+      showToast('Please fill in headline and story content.');
       return;
     }
 
@@ -419,13 +924,30 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
       ? { accentColor: matchedCat.color, badgeBg: matchedCat.badgeBg, badgeText: matchedCat.badgeText }
       : editingArticle.categoryTheme;
 
+    const finalAuthorName = editAuthor.trim() || editingArticle.author;
+    const finalAuthorRole = editRole.trim() || editingArticle.authorRole;
+    const finalAuthorBio =
+      editAuthorBio.trim() ||
+      editingArticle.authorBio ||
+      `Student journalist at Barobo National High School writing for The Inkspirer.`;
+
+    const matchedProfile = authorProfiles.find(
+      (p) => p.name.trim().toLowerCase() === finalAuthorName.toLowerCase()
+    );
+
     const updated: Article = {
       ...editingArticle,
       title: editTitle.trim(),
       deck: editDeck.trim() || editTitle.trim(),
       category: editCategory,
-      author: editAuthor.trim() || editingArticle.author,
-      authorRole: editRole.trim() || editingArticle.authorRole,
+      author: finalAuthorName,
+      authorRole: finalAuthorRole,
+      authorBio: finalAuthorBio,
+      authorGradeSection: editAuthorGrade.trim() || matchedProfile?.gradeSection || editingArticle.authorGradeSection,
+      authorProfileId: matchedProfile?.id || editingArticle.authorProfileId,
+      authorPhotoUrl: matchedProfile?.photoUrl || editingArticle.authorPhotoUrl,
+      authorMotto: matchedProfile?.journalismMotto || editingArticle.authorMotto,
+      authorAccolades: matchedProfile?.accolades || editingArticle.authorAccolades,
       content: paragraphs.length > 0 ? paragraphs : [editContent.trim()],
       pullQuote: editPullQuote.trim() || undefined,
       imageCaption: editCaption.trim() || undefined,
@@ -436,19 +958,51 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
     };
 
     onUpdateArticle(updated);
+
+    // Sync bio changes to StudentAuthorProfile directory as well
+    if (matchedProfile && onUpdateAuthorProfile) {
+      onUpdateAuthorProfile(matchedProfile.id, {
+        name: finalAuthorName,
+        role: finalAuthorRole,
+        gradeSection: editAuthorGrade.trim() || matchedProfile.gradeSection,
+        bio: finalAuthorBio,
+      });
+    } else if (!matchedProfile && onAddAuthorProfile) {
+      onAddAuthorProfile({
+        name: finalAuthorName,
+        role: finalAuthorRole,
+        gradeSection: editAuthorGrade.trim() || 'BNHS Student Journalist',
+        beat: `${editCategory} Desk`,
+        bio: finalAuthorBio,
+      });
+    }
+
     setEditingArticle(null);
-    showToast(`Updated "${updated.title}" successfully!`);
+    showToast(`Updated "${updated.title}" & synced author bio profile!`);
   };
 
   const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinCode === '1991' || pinCode.toLowerCase() === 'bnhs' || pinCode === 'admin' || pinCode === '1234') {
+    const validPin = activeAdviserConfig.pinCode || '1991';
+    if (
+      pinCode === validPin ||
+      pinCode === '1991' ||
+      pinCode.toLowerCase() === 'bnhs' ||
+      pinCode === 'admin' ||
+      pinCode === '1234'
+    ) {
       setIsPinUnlocked(true);
-      loginAsAdviserDemo();
+      loginAsAdviserDemo({
+        name: activeAdviserConfig.name,
+        email: activeAdviserConfig.email,
+        designation: `${activeAdviserConfig.role} · ${activeAdviserConfig.designation}`,
+        department: activeAdviserConfig.department,
+        photoUrl: activeAdviserConfig.photoUrl || null,
+      });
       setAuthError('');
-      showToast('Welcome, Mrs. Maria Elena Delos Reyes (Publication Adviser)');
+      showToast(`Welcome, ${activeAdviserConfig.name} (${activeAdviserConfig.role})`);
     } else {
-      setAuthError('Incorrect PIN. (Tip: Try 1991 or click Quick Login below)');
+      setAuthError(`Incorrect PIN. (Tip: Try ${validPin} or click Quick Login below)`);
     }
   };
 
@@ -462,7 +1016,7 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
 
   const handleRequestRevision = (sub: StorySubmission) => {
     if (!feedbackNote.trim()) {
-      alert('Please write feedback for the student writer before requesting revisions.');
+      showToast('Please write feedback for the student writer before requesting revisions.');
       return;
     }
     onUpdateSubmissionStatus(sub.id, 'revision_requested', feedbackNote);
@@ -474,7 +1028,7 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
   const handlePublishNewArticle = (e: React.FormEvent) => {
     e.preventDefault();
     if (!composerTitle.trim() || !composerContent.trim()) {
-      alert('Please fill in headline and story content.');
+      showToast('Please fill in headline and story content.');
       return;
     }
 
@@ -488,12 +1042,29 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
       ? { accentColor: matchedCat.color, badgeBg: matchedCat.badgeBg, badgeText: matchedCat.badgeText }
       : { accentColor: '#FB923C', badgeBg: 'bg-orange-50', badgeText: 'text-orange-900' };
 
+    const finalAuthorName = composerAuthor.trim() || 'The Inkspirer Editorial Staff';
+    const finalAuthorRole = composerRole.trim() || 'Student Journalist';
+    const finalAuthorBio =
+      composerAuthorBio.trim() ||
+      `Student journalist at Barobo National High School writing for The Inkspirer.`;
+
+    const matchedProfile = authorProfiles.find(
+      (p) => p.name.trim().toLowerCase() === finalAuthorName.toLowerCase()
+    );
+
     onCreateArticle({
       title: composerTitle,
       deck: composerDeck || composerTitle,
       category: composerCategory,
-      author: composerAuthor || 'The Inkspirer Editorial Staff',
-      authorRole: composerRole || 'Student Journalist',
+      author: finalAuthorName,
+      authorRole: finalAuthorRole,
+      authorBio: finalAuthorBio,
+      authorGradeSection: composerAuthorGrade.trim() || matchedProfile?.gradeSection,
+      authorProfileId: matchedProfile?.id,
+      authorPhotoUrl: matchedProfile?.photoUrl,
+      authorMotto: matchedProfile?.journalismMotto,
+      authorAccolades: matchedProfile?.accolades,
+      imageUrl: composerImageUrl.trim() || undefined,
       date: new Date().toLocaleDateString('en-US', {
         month: 'long',
         day: 'numeric',
@@ -509,7 +1080,24 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
       issue: 'Vol. XXIV · Issue 1',
     });
 
-    showToast('Article published successfully to live publication!');
+    // Also ensure or sync the StudentAuthorProfile in the directory
+    if (matchedProfile && onUpdateAuthorProfile) {
+      onUpdateAuthorProfile(matchedProfile.id, {
+        role: finalAuthorRole,
+        gradeSection: composerAuthorGrade.trim() || matchedProfile.gradeSection,
+        bio: finalAuthorBio,
+      });
+    } else if (!matchedProfile && onAddAuthorProfile) {
+      onAddAuthorProfile({
+        name: finalAuthorName,
+        role: finalAuthorRole,
+        gradeSection: composerAuthorGrade.trim() || 'BNHS Student Journalist',
+        beat: `${composerCategory} Desk`,
+        bio: finalAuthorBio,
+      });
+    }
+
+    showToast('Article published & student journalist bio synced!');
     // Reset composer
     setComposerTitle('');
     setComposerDeck('');
@@ -525,15 +1113,15 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
   const handleCreateAnnouncement = (e: React.FormEvent) => {
     e.preventDefault();
     if (!annTitle.trim() || !annContent.trim()) {
-      alert('Please provide announcement title and content.');
+      showToast('Please provide announcement title and content.');
       return;
     }
 
-    onAddAnnouncement({
-      title: annTitle,
+    const payload: Omit<Announcement, 'id'> = {
+      title: annTitle.trim(),
       type: annType,
-      deadline: annDeadline || undefined,
-      location: annLocation || undefined,
+      ...(annDeadline.trim() ? { deadline: annDeadline.trim() } : {}),
+      ...(annLocation.trim() ? { location: annLocation.trim() } : {}),
       urgent: annUrgent,
       isPinned: annUrgent,
       date: new Date().toLocaleDateString('en-US', {
@@ -541,8 +1129,10 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
         day: 'numeric',
         year: 'numeric',
       }),
-      content: annContent,
-    });
+      content: annContent.trim(),
+    };
+
+    onAddAnnouncement(payload);
 
     showToast('Campus announcement dispatched to bulletin!');
     setAnnTitle('');
@@ -640,13 +1230,19 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  loginAsAdviserDemo();
+                  loginAsAdviserDemo({
+                    name: activeAdviserConfig.name,
+                    email: activeAdviserConfig.email,
+                    designation: `${activeAdviserConfig.role} · ${activeAdviserConfig.designation}`,
+                    department: activeAdviserConfig.department,
+                    photoUrl: activeAdviserConfig.photoUrl || null,
+                  });
                   setIsPinUnlocked(true);
-                  showToast('Signed in as Mrs. Maria Elena Delos Reyes (Publication Adviser)');
+                  showToast(`Signed in as ${activeAdviserConfig.name} (${activeAdviserConfig.role})`);
                 }}
                 className="w-full py-2 px-3 text-xs font-semibold rounded bg-[#4A0E17] hover:bg-[#5C1521] text-[#F3C562] border border-[#6B1420] transition-colors flex items-center justify-center gap-2"
               >
-                <span>🔑 Log in as Mrs. Maria Elena Delos Reyes (Publication Adviser)</span>
+                <span>🔑 Log in as {activeAdviserConfig.name} (Portal Adviser)</span>
               </button>
 
               <button
@@ -758,7 +1354,31 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
                   }`}
                 >
                   <Users className="w-3.5 h-3.5" />
-                  <span>Editorial Board Staff</span>
+                  <span>Editorial Board Staff ({staff.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('author-bios')}
+                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                    activeTab === 'author-bios'
+                      ? 'bg-[#0B2545] text-white font-semibold'
+                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200'
+                  }`}
+                >
+                  <Feather className="w-3.5 h-3.5" />
+                  <span>Author Bio Profiles ({authorProfiles.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('adviser')}
+                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                    activeTab === 'adviser'
+                      ? 'bg-[#4A0E17] text-[#F3C562] font-semibold border border-[#D4AF37]/50'
+                      : 'text-[#4A0E17] bg-amber-50/70 hover:bg-amber-100/80 border border-amber-200/80 font-semibold'
+                  }`}
+                >
+                  <Shield className="w-3.5 h-3.5 text-[#D4AF37]" />
+                  <span>Portal Adviser & Resignation</span>
                 </button>
 
                 <button
@@ -1127,32 +1747,99 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
                       />
                     </div>
 
-                    {/* Author Byline */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-stone-700 mb-1">
-                          Writer / Journalist Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={composerAuthor}
-                          onChange={(e) => setComposerAuthor(e.target.value)}
-                          placeholder="e.g. John Cedric Morales"
-                          className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
-                        />
+                    {/* Author Byline & Student Journalist Bio Profile Sub-Section */}
+                    <div className="bg-[#FBF9F5] border border-stone-200 rounded-lg p-4 space-y-3.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-2">
+                        <div className="text-xs font-bold uppercase tracking-wider text-[#0B2545] flex items-center gap-1.5">
+                          <Feather className="w-3.5 h-3.5 text-[#4A0E17]" />
+                          <span>Student Journalist Byline & Author Bio Profile</span>
+                        </div>
+                        {authorProfiles.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-stone-500">Load Registered Journalist:</span>
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                const selected = authorProfiles.find((p) => p.id === e.target.value);
+                                if (selected) {
+                                  setComposerAuthor(selected.name);
+                                  setComposerRole(selected.role);
+                                  setComposerAuthorGrade(selected.gradeSection);
+                                  setComposerAuthorBio(selected.bio);
+                                }
+                              }}
+                              className="px-2.5 py-1 text-xs border border-stone-300 rounded bg-white text-stone-800 font-medium focus:outline-none"
+                            >
+                              <option value="">Select Student Scribe...</option>
+                              {authorProfiles.map((prof) => (
+                                <option key={prof.id} value={prof.id}>
+                                  {prof.name} ({prof.role})
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('author-bios')}
+                              className="text-[11px] font-semibold text-[#133E87] hover:underline"
+                            >
+                              Manage Bios
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-stone-700 mb-1">
+                            Writer / Journalist Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={composerAuthor}
+                            onChange={(e) => setComposerAuthor(e.target.value)}
+                            placeholder="e.g. John Cedric Morales"
+                            className="w-full px-3 py-2 text-xs border border-stone-300 rounded bg-white focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-stone-700 mb-1">
+                            Editorial Role / Title
+                          </label>
+                          <input
+                            type="text"
+                            value={composerRole}
+                            onChange={(e) => setComposerRole(e.target.value)}
+                            placeholder="e.g. Editor-in-Chief"
+                            className="w-full px-3 py-2 text-xs border border-stone-300 rounded bg-white focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-stone-700 mb-1">
+                            Grade Level & Section
+                          </label>
+                          <input
+                            type="text"
+                            value={composerAuthorGrade}
+                            onChange={(e) => setComposerAuthorGrade(e.target.value)}
+                            placeholder="e.g. Grade 12 HUMSS - Rizal"
+                            className="w-full px-3 py-2 text-xs border border-stone-300 rounded bg-white focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                          />
+                        </div>
                       </div>
 
                       <div>
                         <label className="block text-xs font-semibold text-stone-700 mb-1">
-                          Author Role or Grade Level
+                          Student Journalist Author Bio (Displayed in Article View)
                         </label>
-                        <input
-                          type="text"
-                          value={composerRole}
-                          onChange={(e) => setComposerRole(e.target.value)}
-                          placeholder="e.g. Editor-in-Chief / Grade 12 HUMSS"
-                          className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                        <textarea
+                          rows={2}
+                          value={composerAuthorBio}
+                          onChange={(e) => setComposerAuthorBio(e.target.value)}
+                          placeholder="Short biography of the student journalist (e.g., Grade 12 HUMSS student, RSPC qualifier, and campus reporter...)"
+                          className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded bg-white leading-relaxed focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
                         />
                       </div>
                     </div>
@@ -1544,29 +2231,85 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
                             />
                           </div>
 
-                          {/* Author & Role */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                                Author Name
-                              </label>
-                              <input
-                                type="text"
-                                value={editAuthor}
-                                onChange={(e) => setEditAuthor(e.target.value)}
-                                className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
-                              />
+                          {/* Author & Student Journalist Bio Profile Section */}
+                          <div className="bg-[#FBF9F5] border border-stone-200 rounded-lg p-3.5 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-xs font-bold uppercase tracking-wider text-[#0B2545] flex items-center gap-1.5">
+                                <Feather className="w-3.5 h-3.5 text-[#4A0E17]" />
+                                <span>Student Journalist Byline & Bio Profile</span>
+                              </span>
+                              {authorProfiles.length > 0 && (
+                                <select
+                                  value=""
+                                  onChange={(e) => {
+                                    const selected = authorProfiles.find((p) => p.id === e.target.value);
+                                    if (selected) {
+                                      setEditAuthor(selected.name);
+                                      setEditRole(selected.role);
+                                      setEditAuthorGrade(selected.gradeSection);
+                                      setEditAuthorBio(selected.bio);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 text-xs border border-stone-300 rounded bg-white text-stone-800 font-medium"
+                                >
+                                  <option value="">Switch / Load Student Journalist Bio...</option>
+                                  {authorProfiles.map((prof) => (
+                                    <option key={prof.id} value={prof.id}>
+                                      {prof.name} ({prof.role})
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div>
+                                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                                  Author Name
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editAuthor}
+                                  onChange={(e) => setEditAuthor(e.target.value)}
+                                  className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded bg-white focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                                  Author Role
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editRole}
+                                  onChange={(e) => setEditRole(e.target.value)}
+                                  className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded bg-white focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                                  Grade & Section
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editAuthorGrade}
+                                  onChange={(e) => setEditAuthorGrade(e.target.value)}
+                                  placeholder="e.g. Grade 12 HUMSS"
+                                  className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded bg-white focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                                />
+                              </div>
                             </div>
 
                             <div>
                               <label className="block text-xs font-semibold text-stone-700 mb-1">
-                                Author Role or Section
+                                Student Journalist Author Bio (Synced to Article View)
                               </label>
-                              <input
-                                type="text"
-                                value={editRole}
-                                onChange={(e) => setEditRole(e.target.value)}
-                                className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              <textarea
+                                rows={2}
+                                value={editAuthorBio}
+                                onChange={(e) => setEditAuthorBio(e.target.value)}
+                                className="w-full px-3 py-1.5 text-xs border border-stone-300 rounded bg-white leading-relaxed focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
                               />
                             </div>
                           </div>
@@ -1809,17 +2552,21 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
                     {announcements.map((ann) => (
                       <div
                         key={ann.id}
-                        className="bg-white border border-stone-200 rounded p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                        className={`bg-white border rounded p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors ${
+                          editingAnnouncement?.id === ann.id
+                            ? 'border-[#0B2545] ring-2 ring-[#0B2545]/15 bg-blue-50/20'
+                            : 'border-stone-200'
+                        }`}
                       >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-xs">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
                             <span className="font-bold text-[#991B1B] uppercase tracking-wide">
                               {ann.type} Notice
                             </span>
                             <span aria-hidden="true">·</span>
                             <span className="text-stone-500">{ann.date}</span>
                             {ann.isPinned && (
-                              <span className="text-[10px] font-bold text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded">
+                              <span className="text-[10px] font-bold text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded">
                                 Pinned
                               </span>
                             )}
@@ -1827,18 +2574,45 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
                           <h4 className="font-serif font-bold text-stone-900 text-base">
                             {ann.title}
                           </h4>
-                          <p className="text-xs text-stone-600 line-clamp-2 max-w-xl">
+                          <p className="text-xs text-stone-600 line-clamp-2 max-w-2xl">
                             {ann.content}
                           </p>
+                          {(ann.deadline || ann.location) && (
+                            <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-stone-500">
+                              {ann.deadline && (
+                                <span className="inline-flex items-center gap-1 font-medium text-stone-700 bg-stone-100 px-2 py-0.5 rounded">
+                                  <span>📅 Effective / Deadline:</span>
+                                  <span>{ann.deadline}</span>
+                                </span>
+                              )}
+                              {ann.location && (
+                                <span className="inline-flex items-center gap-1 font-medium text-stone-700 bg-stone-100 px-2 py-0.5 rounded">
+                                  <span>📍 Venue:</span>
+                                  <span>{ann.location}</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
                           <button
+                            type="button"
+                            onClick={() => handleOpenEditAnnouncement(ann)}
+                            className="px-3 py-1.5 text-xs font-semibold text-white bg-[#0B2545] hover:bg-[#133E87] rounded border border-[#0B2545] transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                            title={`Edit ${ann.type} Notice`}
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Edit Notice</span>
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => {
                               onTogglePinAnnouncement(ann.id);
                               showToast(ann.isPinned ? 'Unpinned notice' : 'Pinned notice to top');
                             }}
-                            className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+                            className={`px-2.5 py-1.5 text-xs rounded border transition-colors cursor-pointer ${
                               ann.isPinned
                                 ? 'bg-amber-100 border-amber-300 text-amber-900 font-semibold'
                                 : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'
@@ -1848,13 +2622,15 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
                           </button>
 
                           <button
+                            type="button"
                             onClick={() => {
-                              if (confirm(`Delete announcement "${ann.title}"?`)) {
-                                onDeleteAnnouncement(ann.id);
-                                showToast('Announcement removed');
+                              onDeleteAnnouncement(ann.id);
+                              if (editingAnnouncement?.id === ann.id) {
+                                setEditingAnnouncement(null);
                               }
+                              showToast('Announcement removed');
                             }}
-                            className="p-1.5 rounded text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            className="p-1.5 rounded text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                             title="Delete announcement"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1863,6 +2639,135 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
                       </div>
                     ))}
                   </div>
+
+                  {/* EDIT ACADEMIC / CAMPUS NOTICE MODAL */}
+                  {editingAnnouncement && (
+                    <div className="fixed inset-0 z-[70] bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                      <div className="bg-white rounded-lg shadow-2xl border border-stone-200 w-full max-w-lg overflow-hidden">
+                        <div className="bg-[#0B2545] text-white px-5 py-3.5 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Edit3 className="w-4 h-4 text-[#D4AF37]" />
+                            <h4 className="font-serif font-bold text-base">
+                              Edit {editAnnType} Notice
+                            </h4>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setEditingAnnouncement(null)}
+                            className="p-1 rounded text-stone-300 hover:text-white cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <form onSubmit={handleSaveEditAnnouncement} className="p-5 space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                                Notice Title *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={editAnnTitle}
+                                onChange={(e) => setEditAnnTitle(e.target.value)}
+                                className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                                Bulletin Category
+                              </label>
+                              <select
+                                value={editAnnType}
+                                onChange={(e) =>
+                                  setEditAnnType(e.target.value as Announcement['type'])
+                                }
+                                className="w-full px-3 py-2 text-xs border border-stone-300 rounded bg-white focus:ring-1 focus:ring-[#0B2545] focus:outline-none font-medium"
+                              >
+                                <option value="Academic">Academic Notice</option>
+                                <option value="Press">Press Conference</option>
+                                <option value="Event">Campus Event</option>
+                                <option value="Urgent">Urgent / Safety</option>
+                                <option value="General">General Notice</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                                Effective Date or Deadline
+                              </label>
+                              <input
+                                type="text"
+                                value={editAnnDeadline}
+                                onChange={(e) => setEditAnnDeadline(e.target.value)}
+                                placeholder="e.g. November 6–7, 2026"
+                                className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                                Venue or Location
+                              </label>
+                              <input
+                                type="text"
+                                value={editAnnLocation}
+                                onChange={(e) => setEditAnnLocation(e.target.value)}
+                                placeholder="e.g. All BNHS Classrooms"
+                                className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-stone-700">
+                              <input
+                                type="checkbox"
+                                checked={editAnnUrgent}
+                                onChange={(e) => setEditAnnUrgent(e.target.checked)}
+                                className="rounded border-stone-300 text-red-600 focus:ring-red-500"
+                              />
+                              <span>Pin to Top as Urgent / Priority Notice</span>
+                            </label>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                              Notice Details & Instructions *
+                            </label>
+                            <textarea
+                              required
+                              rows={4}
+                              value={editAnnContent}
+                              onChange={(e) => setEditAnnContent(e.target.value)}
+                              className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200">
+                            <button
+                              type="button"
+                              onClick={() => setEditingAnnouncement(null)}
+                              className="px-4 py-2 text-xs font-semibold text-stone-600 bg-stone-100 hover:bg-stone-200 rounded transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="px-4 py-2 text-xs font-bold text-white bg-[#0B2545] hover:bg-[#133E87] rounded transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Save Notice Changes</span>
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2531,37 +3436,1234 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
               {/* TAB 5: EDITORIAL STAFF */}
               {activeTab === 'staff' && (
                 <div className="space-y-6">
-                  <div className="border-b border-stone-200 pb-3">
-                    <h3 className="font-serif text-xl font-bold text-stone-900">
-                      The Inkspirer Editorial Board & Masthead Roster
-                    </h3>
-                    <p className="text-xs text-stone-500 mt-1">
-                      Official publication advisers and student editorial staff of Barobo National High School (A.Y. 2026–2027).
-                    </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-3">
+                    <div>
+                      <h3 className="font-serif text-xl font-bold text-stone-900">
+                        The Inkspirer Editorial Board & Masthead Roster
+                      </h3>
+                      <p className="text-xs text-stone-500 mt-1">
+                        Official publication advisers and student editorial staff of Barobo National High School (A.Y. 2026–2027). Add new staff members, appoint a Portal Adviser, or process an Adviser resignation and handover.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <span className="text-xs text-stone-600 bg-stone-100 px-3 py-1.5 rounded font-medium">
+                        {staff.length} Roster Members
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleOpenAddPortalAdviser}
+                        className="px-3.5 py-2 text-xs font-bold text-[#F3C562] bg-[#4A0E17] hover:bg-[#34070E] border border-[#D4AF37]/50 rounded transition-colors flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Shield className="w-3.5 h-3.5 text-[#D4AF37]" />
+                        <span>+ Add Portal Adviser</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenAddStaff}
+                        className="px-4 py-2 text-xs font-bold text-stone-900 bg-[#D4AF37] hover:bg-[#E5BE4A] rounded transition-colors flex items-center gap-1.5 shadow-xs"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                        <span>Add Editorial Member</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Active Portal Adviser Quick Status & Resignation Banner */}
+                  <div className="bg-linear-to-r from-[#34070E] via-[#4A0E17] to-[#0B2545] text-white rounded-lg p-4 border border-[#D4AF37]/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-11 h-11 rounded-full bg-[#D4AF37]/20 border-2 border-[#D4AF37] flex items-center justify-center text-[#F3C562] font-bold text-sm shrink-0">
+                        <Shield className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#D4AF37] text-[#0B2545]">
+                            Active Portal Adviser
+                          </span>
+                          <span className="text-xs text-amber-200/90 font-mono">
+                            {activeAdviserConfig.email}
+                          </span>
+                        </div>
+                        <h4 className="font-serif font-bold text-base text-white mt-0.5">
+                          {activeAdviserConfig.name}
+                        </h4>
+                        <p className="text-xs text-stone-200">
+                          {activeAdviserConfig.role} · {activeAdviserConfig.designation} ({activeAdviserConfig.department})
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleOpenAddPortalAdviser}
+                        className="px-3 py-1.5 text-xs font-bold text-[#0B2545] bg-[#F3C562] hover:bg-[#D4AF37] rounded transition-colors"
+                      >
+                        Appoint New Adviser
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenResignModal}
+                        className="px-3 py-1.5 text-xs font-bold text-white bg-red-700 hover:bg-red-800 border border-red-400/40 rounded transition-colors"
+                      >
+                        Resign & Hand Over Advisership
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {staff.map((member) => (
-                      <div
-                        key={member.id}
-                        className="bg-white border border-stone-200 rounded-lg p-4 flex items-center gap-4"
-                      >
-                        <div className="w-12 h-12 rounded-full bg-[#0B2545] text-white flex items-center justify-center font-bold text-sm tracking-wide shrink-0">
-                          {member.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                    {staff.map((member) => {
+                      const isAdviserRole =
+                        member.role.toLowerCase().includes('adviser') ||
+                        member.role.toLowerCase().includes('consultant');
+                      const isEmeritus =
+                        member.role.toLowerCase().includes('former') ||
+                        member.role.toLowerCase().includes('emeritus') ||
+                        member.adviserStatus === 'emeritus';
+                      const isCurrentPrimaryAdviser =
+                        member.id === activeAdviserConfig.id ||
+                        (member.name.toLowerCase() === activeAdviserConfig.name.toLowerCase() &&
+                          !isEmeritus);
+
+                      return (
+                        <div
+                          key={member.id}
+                          className={`bg-white border rounded-lg p-4 flex items-start justify-between gap-3 shadow-2xs transition-all group ${
+                            isCurrentPrimaryAdviser
+                              ? 'border-[#D4AF37] ring-1 ring-[#D4AF37]/50 bg-amber-50/20'
+                              : 'border-stone-200 hover:border-stone-300'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3.5 min-w-0">
+                            {member.photoUrl ? (
+                              <img
+                                src={member.photoUrl}
+                                alt={member.name}
+                                className="w-12 h-12 rounded-full object-cover border-2 border-[#D4AF37] shrink-0"
+                              />
+                            ) : (
+                              <div
+                                className={`w-12 h-12 rounded-full text-white flex items-center justify-center font-bold text-sm tracking-wide shrink-0 border-2 ${
+                                  isEmeritus
+                                    ? 'bg-stone-600 border-stone-400'
+                                    : isAdviserRole
+                                    ? 'bg-[#4A0E17] border-[#D4AF37]'
+                                    : 'bg-[#0B2545] border-[#133E87]'
+                                }`}
+                              >
+                                {member.name
+                                  .split(' ')
+                                  .filter(Boolean)
+                                  .map((n) => n[0])
+                                  .join('')
+                                  .slice(0, 2)
+                                  .toUpperCase()}
+                              </div>
+                            )}
+
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-bold text-stone-900 text-sm truncate">
+                                  {member.name}
+                                </h4>
+                                {isCurrentPrimaryAdviser && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#4A0E17] text-[#F3C562] border border-[#D4AF37]">
+                                    Active Portal Adviser
+                                  </span>
+                                )}
+                                {isAdviserRole && !isCurrentPrimaryAdviser && !isEmeritus && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#4A0E17]/10 text-[#4A0E17] border border-[#4A0E17]/20">
+                                    Co-Adviser
+                                  </span>
+                                )}
+                                {isEmeritus && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-200 text-stone-700">
+                                    Former Adviser (Resigned)
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs font-semibold text-[#133E87] mt-0.5">
+                                {member.role}
+                              </div>
+                              <div className="text-xs text-stone-600 mt-0.5">
+                                {member.gradeOrDesignation}
+                              </div>
+                              <div className="text-[11px] text-stone-400 mt-0.5">
+                                {member.department}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 shrink-0">
+                            {isCurrentPrimaryAdviser ? (
+                              <button
+                                type="button"
+                                onClick={handleOpenResignModal}
+                                className="px-2.5 py-1.5 text-[11px] font-bold text-red-800 bg-red-50 hover:bg-red-700 hover:text-white border border-red-200 rounded transition-colors"
+                                title="Resign as Portal Adviser and hand over to a successor"
+                              >
+                                Resign
+                              </button>
+                            ) : (
+                              isAdviserRole && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSetMemberAsActiveAdviser(member)}
+                                  className="px-2.5 py-1.5 text-[11px] font-semibold text-[#4A0E17] bg-amber-50 hover:bg-[#4A0E17] hover:text-white border border-amber-300 rounded transition-colors"
+                                  title={`Make ${member.name} the Active Portal Adviser`}
+                                >
+                                  Set Active Adviser
+                                </button>
+                              )
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditStaff(member)}
+                              className="px-2.5 py-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-[#0B2545] hover:text-white rounded transition-colors flex items-center gap-1"
+                              title={`Edit ${member.name}`}
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingStaff(member)}
+                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title={`Remove ${member.name} from roster`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <h4 className="font-bold text-stone-900 text-sm">{member.name}</h4>
-                          <div className="text-xs font-semibold text-[#133E87]">{member.role}</div>
-                          <div className="text-xs text-stone-500 mt-0.5">{member.gradeOrDesignation}</div>
-                          <div className="text-[11px] text-stone-400 mt-0.5">{member.department}</div>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   <div className="border border-stone-200 bg-[#FBF9F5] p-4 rounded text-xs text-stone-600">
                     <strong className="text-stone-800">School Publication Adviser Note:</strong>{' '}
                     The Inkspirer is the official high school paper of Barobo National High School, fostering free, ethical, and courageous campus journalism in Surigao del Sur under the guidance of the English and Filipino Departments.
+                  </div>
+
+                  {/* MODAL 1: ADD EDITORIAL BOARD MEMBER */}
+                  {isAddStaffOpen && (
+                    <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                      <div className="bg-white rounded-lg shadow-2xl border border-stone-200 w-full max-w-lg overflow-hidden">
+                        <div className="bg-[#0B2545] text-white px-5 py-3.5 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4 text-[#D4AF37]" />
+                            <h4 className="font-serif font-bold text-base">
+                              Add Member to Editorial Board & Masthead Roster
+                            </h4>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsAddStaffOpen(false)}
+                            className="p-1 rounded text-stone-300 hover:text-white"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <form onSubmit={handleCreateStaffMember} className="p-5 space-y-4">
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                              Full Name *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={newStaffName}
+                              onChange={(e) => setNewStaffName(e.target.value)}
+                              placeholder="e.g., Princess Mae S. Urbiztondo"
+                              className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                              Editorial Role / Position *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={newStaffRole}
+                              onChange={(e) => setNewStaffRole(e.target.value)}
+                              placeholder="e.g., Managing Editor, News Editor, Photojournalist"
+                              className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                            />
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {[
+                                'Publication Adviser',
+                                'Editor-in-Chief',
+                                'Associate Editor',
+                                'Managing Editor',
+                                'News Editor',
+                                'Features Editor',
+                                'Opinion Editor',
+                                'Sports Editor',
+                                'Chief Photojournalist',
+                                'Staff Writer',
+                              ].map((rolePreset) => (
+                                <button
+                                  key={rolePreset}
+                                  type="button"
+                                  onClick={() => setNewStaffRole(rolePreset)}
+                                  className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
+                                    newStaffRole === rolePreset
+                                      ? 'bg-[#0B2545] text-white border-[#0B2545]'
+                                      : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+                                  }`}
+                                >
+                                  {rolePreset}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                                Grade Level / Designation *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={newStaffGrade}
+                                onChange={(e) => setNewStaffGrade(e.target.value)}
+                                placeholder="e.g., Grade 12 HUMSS or Master Teacher II"
+                                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                                Department / Desk Assignment *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={newStaffDept}
+                                onChange={(e) => setNewStaffDept(e.target.value)}
+                                placeholder="e.g., News & Public Affairs Desk"
+                                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                              Profile Photo (Optional)
+                            </label>
+                            <div className="flex items-center gap-3">
+                              {newStaffPhoto ? (
+                                <img
+                                  src={newStaffPhoto}
+                                  alt="Preview"
+                                  className="w-11 h-11 rounded-full object-cover border border-[#D4AF37] shrink-0"
+                                />
+                              ) : (
+                                <div className="w-11 h-11 rounded-full bg-[#0B2545] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                                  {(newStaffName || 'IN')
+                                    .split(' ')
+                                    .filter(Boolean)
+                                    .map((n) => n[0])
+                                    .join('')
+                                    .slice(0, 2)
+                                    .toUpperCase()}
+                                </div>
+                              )}
+                              <div className="flex-1 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <label className="px-3 py-1.5 text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-stone-700 rounded cursor-pointer transition-colors inline-flex items-center gap-1.5">
+                                    <Upload className="w-3.5 h-3.5" />
+                                    <span>Upload Photo</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => handleStaffPhotoUpload(e, false)}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  {newStaffPhoto && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setNewStaffPhoto('')}
+                                      className="text-xs text-red-600 hover:underline"
+                                    >
+                                      Clear Photo
+                                    </button>
+                                  )}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={newStaffPhoto}
+                                  onChange={(e) => setNewStaffPhoto(e.target.value)}
+                                  placeholder="Or paste image URL..."
+                                  className="w-full px-2.5 py-1 text-xs border border-stone-200 rounded focus:outline-none focus:border-stone-400"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200">
+                            <button
+                              type="button"
+                              onClick={() => setIsAddStaffOpen(false)}
+                              className="px-4 py-2 text-xs font-semibold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 rounded transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="px-4 py-2 text-xs font-bold text-stone-900 bg-[#D4AF37] hover:bg-[#E5BE4A] rounded transition-colors shadow-xs"
+                            >
+                              Add to Masthead Roster
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* MODAL 2: EDIT EDITORIAL BOARD MEMBER */}
+                  {editingStaff && (
+                    <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                      <div className="bg-white rounded-lg shadow-2xl border border-stone-200 w-full max-w-lg overflow-hidden">
+                        <div className="bg-[#0B2545] text-white px-5 py-3.5 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Edit3 className="w-4 h-4 text-[#D4AF37]" />
+                            <h4 className="font-serif font-bold text-base">
+                              Edit Editorial Board Member
+                            </h4>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setEditingStaff(null)}
+                            className="p-1 rounded text-stone-300 hover:text-white"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <form onSubmit={handleSaveEditStaffMember} className="p-5 space-y-4">
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                              Full Name *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={editStaffName}
+                              onChange={(e) => setEditStaffName(e.target.value)}
+                              className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                              Editorial Role / Position *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={editStaffRole}
+                              onChange={(e) => setEditStaffRole(e.target.value)}
+                              className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                            />
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {[
+                                'Publication Adviser',
+                                'Editor-in-Chief',
+                                'Associate Editor',
+                                'Managing Editor',
+                                'News Editor',
+                                'Features Editor',
+                                'Opinion Editor',
+                                'Sports Editor',
+                                'Chief Photojournalist',
+                                'Staff Writer',
+                              ].map((rolePreset) => (
+                                <button
+                                  key={rolePreset}
+                                  type="button"
+                                  onClick={() => setEditStaffRole(rolePreset)}
+                                  className={`px-2 py-0.5 text-[11px] rounded border transition-colors ${
+                                    editStaffRole === rolePreset
+                                      ? 'bg-[#0B2545] text-white border-[#0B2545]'
+                                      : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+                                  }`}
+                                >
+                                  {rolePreset}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                                Grade Level / Designation *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={editStaffGrade}
+                                onChange={(e) => setEditStaffGrade(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                                Department / Desk Assignment *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={editStaffDept}
+                                onChange={(e) => setEditStaffDept(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                              Profile Photo (Optional)
+                            </label>
+                            <div className="flex items-center gap-3">
+                              {editStaffPhoto ? (
+                                <img
+                                  src={editStaffPhoto}
+                                  alt="Preview"
+                                  className="w-11 h-11 rounded-full object-cover border border-[#D4AF37] shrink-0"
+                                />
+                              ) : (
+                                <div className="w-11 h-11 rounded-full bg-[#0B2545] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                                  {(editStaffName || 'IN')
+                                    .split(' ')
+                                    .filter(Boolean)
+                                    .map((n) => n[0])
+                                    .join('')
+                                    .slice(0, 2)
+                                    .toUpperCase()}
+                                </div>
+                              )}
+                              <div className="flex-1 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <label className="px-3 py-1.5 text-xs font-semibold bg-stone-100 hover:bg-stone-200 text-stone-700 rounded cursor-pointer transition-colors inline-flex items-center gap-1.5">
+                                    <Upload className="w-3.5 h-3.5" />
+                                    <span>Change Photo</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => handleStaffPhotoUpload(e, true)}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                  {editStaffPhoto && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditStaffPhoto('')}
+                                      className="text-xs text-red-600 hover:underline"
+                                    >
+                                      Remove Photo
+                                    </button>
+                                  )}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={editStaffPhoto}
+                                  onChange={(e) => setEditStaffPhoto(e.target.value)}
+                                  placeholder="Or paste image URL..."
+                                  className="w-full px-2.5 py-1 text-xs border border-stone-200 rounded focus:outline-none focus:border-stone-400"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200">
+                            <button
+                              type="button"
+                              onClick={() => setEditingStaff(null)}
+                              className="px-4 py-2 text-xs font-semibold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 rounded transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              className="px-4 py-2 text-xs font-bold text-white bg-[#0B2545] hover:bg-[#133E87] rounded transition-colors shadow-xs"
+                            >
+                              Save Changes
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* MODAL 3: DELETE STAFF CONFIRMATION */}
+                  {deletingStaff && (
+                    <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                      <div className="bg-white rounded-lg shadow-2xl border border-stone-200 w-full max-w-md p-6 space-y-4">
+                        <div className="flex items-center gap-3 text-red-700">
+                          <AlertTriangle className="w-6 h-6 shrink-0" />
+                          <h4 className="font-serif font-bold text-lg text-stone-900">
+                            Remove Member from Masthead Roster?
+                          </h4>
+                        </div>
+                        <p className="text-xs text-stone-600 leading-relaxed">
+                          Are you sure you want to remove{' '}
+                          <strong className="text-stone-900">{deletingStaff.name}</strong> (
+                          {deletingStaff.role}) from The Inkspirer Editorial Board & Masthead Roster?
+                        </p>
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setDeletingStaff(null)}
+                            className="px-4 py-2 text-xs font-semibold text-stone-600 bg-stone-100 hover:bg-stone-200 rounded transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleConfirmDeleteStaff}
+                            className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded transition-colors"
+                          >
+                            Confirm Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB: STUDENT JOURNALIST AUTHOR BIO PROFILES */}
+              {activeTab === 'author-bios' && onAddAuthorProfile && onUpdateAuthorProfile && onDeleteAuthorProfile && (
+                <AuthorBioManager
+                  authorProfiles={authorProfiles}
+                  articles={articles}
+                  onAddAuthorProfile={onAddAuthorProfile}
+                  onUpdateAuthorProfile={onUpdateAuthorProfile}
+                  onDeleteAuthorProfile={onDeleteAuthorProfile}
+                  onAssignAuthorToComposer={(prof) => {
+                    setComposerAuthor(prof.name);
+                    setComposerRole(prof.role);
+                    setComposerAuthorGrade(prof.gradeSection);
+                    setComposerAuthorBio(prof.bio);
+                    setActiveTab('compose');
+                    showToast(`Loaded ${prof.name}'s bio into Story Composer!`);
+                  }}
+                  onShowToast={showToast}
+                />
+              )}
+
+              {/* TAB: PORTAL ADVISER MANAGEMENT, RESIGNATION & SUCCESSION */}
+              {activeTab === 'adviser' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-4">
+                    <div>
+                      <div className="text-xs font-bold uppercase tracking-wider text-[#991B1B] mb-0.5">
+                        Publication Governance & Continuity (RA 7079)
+                      </div>
+                      <h3 className="font-serif text-2xl font-bold text-stone-900">
+                        Portal Adviser Management & Resignation Handover
+                      </h3>
+                      <p className="text-xs text-stone-500 mt-1 max-w-2xl">
+                        Manage the official School Publication Adviser of The Inkspirer. Add a new Portal Adviser or Co-Adviser, update Adviser credentials, or process an official Adviser resignation and seamless portal handover to a successor.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleOpenAddPortalAdviser}
+                        className="px-4 py-2 text-xs font-bold text-white bg-[#0B2545] hover:bg-[#133E87] rounded transition-colors flex items-center gap-1.5 shadow-xs"
+                      >
+                        <PlusCircle className="w-4 h-4 text-[#D4AF37]" />
+                        <span>Add Portal Adviser</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOpenResignModal}
+                        className="px-4 py-2 text-xs font-bold text-white bg-red-700 hover:bg-red-800 rounded transition-colors flex items-center gap-1.5 shadow-xs"
+                      >
+                        <AlertTriangle className="w-4 h-4 text-amber-200" />
+                        <span>Resign as Adviser & Hand Over</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Active Portal Adviser Official Card */}
+                  <div className="bg-white border-2 border-[#D4AF37] rounded-xl overflow-hidden shadow-md">
+                    <div className="bg-linear-to-r from-[#34070E] via-[#4A0E17] to-[#0B2545] px-6 py-4 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37] flex items-center justify-center text-[#F3C562]">
+                          <Shield className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[#D4AF37] text-[#0B2545]">
+                            Current Incumbent Portal Adviser
+                          </span>
+                          <h4 className="font-serif text-lg font-bold text-white mt-0.5">
+                            {activeAdviserConfig.name}
+                          </h4>
+                        </div>
+                      </div>
+                      <div className="text-xs text-amber-200 font-mono">
+                        Appointed: {activeAdviserConfig.appointedDate}
+                      </div>
+                    </div>
+
+                    <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                      <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div className="bg-stone-50 p-3 rounded border border-stone-200">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                            Official Role Title
+                          </div>
+                          <div className="font-bold text-stone-900 text-sm mt-0.5">
+                            {activeAdviserConfig.role}
+                          </div>
+                        </div>
+
+                        <div className="bg-stone-50 p-3 rounded border border-stone-200">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                            Faculty Rank / Designation
+                          </div>
+                          <div className="font-bold text-stone-900 text-sm mt-0.5">
+                            {activeAdviserConfig.designation}
+                          </div>
+                        </div>
+
+                        <div className="bg-stone-50 p-3 rounded border border-stone-200">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                            Department & Office
+                          </div>
+                          <div className="font-semibold text-stone-800 mt-0.5">
+                            {activeAdviserConfig.department}
+                          </div>
+                        </div>
+
+                        <div className="bg-stone-50 p-3 rounded border border-stone-200">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                            Official DepEd / Portal Email & PIN
+                          </div>
+                          <div className="font-mono text-stone-800 mt-0.5">
+                            {activeAdviserConfig.email} · PIN: <strong className="text-[#4A0E17]">{activeAdviserConfig.pinCode}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-4 space-y-3">
+                        <div className="text-xs font-bold text-[#4A0E17]">
+                          Need to Step Down or Resign as Adviser?
+                        </div>
+                        <p className="text-[11px] text-stone-600 leading-relaxed">
+                          If the current Publication Adviser is resigning, transferring, or being reassigned, click below to appoint the incoming Portal Adviser and transfer full administrative custody.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleOpenResignModal}
+                          className="w-full py-2 px-3 text-xs font-bold text-white bg-red-700 hover:bg-red-800 rounded transition-colors shadow-xs"
+                        >
+                          Process Adviser Resignation & Handover
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* All Advisers & Former Advisers on Roster */}
+                  <div className="space-y-3">
+                    <h4 className="font-serif font-bold text-base text-stone-900">
+                      Registered Portal Advisers & Faculty Consultants
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {staff
+                        .filter(
+                          (m) =>
+                            m.role.toLowerCase().includes('adviser') ||
+                            m.role.toLowerCase().includes('consultant') ||
+                            m.id === activeAdviserConfig.id
+                        )
+                        .map((adv) => {
+                          const isCurrent =
+                            adv.id === activeAdviserConfig.id ||
+                            (adv.name.toLowerCase() === activeAdviserConfig.name.toLowerCase() &&
+                              !adv.role.toLowerCase().includes('former'));
+                          const isEmeritus =
+                            adv.role.toLowerCase().includes('former') ||
+                            adv.role.toLowerCase().includes('emeritus') ||
+                            adv.adviserStatus === 'emeritus';
+                          return (
+                            <div
+                              key={adv.id}
+                              className={`p-4 rounded-lg border flex items-center justify-between gap-3 ${
+                                isCurrent
+                                  ? 'bg-amber-50/40 border-[#D4AF37]'
+                                  : 'bg-white border-stone-200'
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-stone-900">
+                                    {adv.name}
+                                  </span>
+                                  {isCurrent ? (
+                                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900">
+                                      Active Primary
+                                    </span>
+                                  ) : isEmeritus ? (
+                                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-stone-200 text-stone-700">
+                                      Resigned / Emeritus
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-800">
+                                      Co-Adviser
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-[#0B2545] font-semibold mt-0.5">
+                                  {adv.role}
+                                </div>
+                                <div className="text-xs text-stone-500">{adv.gradeOrDesignation}</div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5">
+                                {!isCurrent && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetMemberAsActiveAdviser(adv)}
+                                    className="px-2.5 py-1.5 text-xs font-bold text-white bg-[#0B2545] hover:bg-[#133E87] rounded transition-colors"
+                                  >
+                                    Make Active Adviser
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditStaff(adv)}
+                                  className="px-2.5 py-1.5 text-xs font-semibold text-stone-700 bg-stone-100 hover:bg-stone-200 rounded transition-colors"
+                                >
+                                  Edit
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+
+                  {/* Official Handover & Resignation History Log */}
+                  <div className="space-y-3 pt-2">
+                    <h4 className="font-serif font-bold text-base text-stone-900">
+                      Official Adviser Succession & Resignation Log
+                    </h4>
+                    {handoverHistory.length === 0 ? (
+                      <div className="bg-stone-50 border border-stone-200 rounded-lg p-6 text-center text-xs text-stone-500">
+                        No adviser resignations or handovers recorded yet. Currently under the advisership of{' '}
+                        <strong className="text-stone-800">{activeAdviserConfig.name}</strong>.
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {handoverHistory.map((item) => (
+                          <div
+                            key={item.id}
+                            className="bg-white border border-stone-200 rounded-lg p-4 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-red-800 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                                  Resigned: {item.previousAdviserName}
+                                </span>
+                                <span className="text-stone-400">→</span>
+                                <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  Appointed Successor: {item.newAdviserName} ({item.newAdviserDesignation})
+                                </span>
+                              </div>
+                              <p className="text-stone-600 italic">“{item.reasonOrNote}”</p>
+                            </div>
+                            <div className="text-[11px] text-stone-500 font-mono shrink-0">
+                              {item.handoverDate}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SHARED MODAL A: ADD NEW PORTAL ADVISER / CO-ADVISER */}
+              {isAddAdviserModalOpen && (
+                <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white rounded-lg shadow-2xl border border-stone-200 w-full max-w-lg overflow-hidden">
+                    <div className="bg-[#4A0E17] text-white px-5 py-3.5 flex items-center justify-between border-b border-[#D4AF37]/40">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-[#F3C562]" />
+                        <h4 className="font-serif font-bold text-base">
+                          Add Portal Adviser / Faculty Consultant
+                        </h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddAdviserModalOpen(false)}
+                        className="p-1 rounded text-stone-300 hover:text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleCreatePortalAdviser} className="p-5 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                            Adviser Full Name *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={newAdviserName}
+                            onChange={(e) => setNewAdviserName(e.target.value)}
+                            placeholder="e.g., Mr. Roberto L. Villanueva"
+                            className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                            Official DepEd Email
+                          </label>
+                          <input
+                            type="email"
+                            value={newAdviserEmail}
+                            onChange={(e) => setNewAdviserEmail(e.target.value)}
+                            placeholder="e.g., r.villanueva@bnhs.deped.edu.ph"
+                            className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                            Adviser Position Title *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={newAdviserRole}
+                            onChange={(e) => setNewAdviserRole(e.target.value)}
+                            placeholder="School Publication Adviser"
+                            className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                            Faculty Rank / Designation *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={newAdviserDesignation}
+                            onChange={(e) => setNewAdviserDesignation(e.target.value)}
+                            placeholder="e.g., Master Teacher I - English Dept."
+                            className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                            Department / Office *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={newAdviserDepartment}
+                            onChange={(e) => setNewAdviserDepartment(e.target.value)}
+                            className="w-full px-3 py-2 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                            Portal Adviser Access PIN
+                          </label>
+                          <input
+                            type="text"
+                            value={newAdviserPin}
+                            onChange={(e) => setNewAdviserPin(e.target.value)}
+                            placeholder="1991"
+                            className="w-full px-3 py-2 text-xs font-mono border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="bg-amber-50/80 border border-amber-200 rounded p-3">
+                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#34070E]">
+                          <input
+                            type="checkbox"
+                            checked={makePrimaryAdviser}
+                            onChange={(e) => setMakePrimaryAdviser(e.target.checked)}
+                            className="rounded border-stone-300 text-[#4A0E17] focus:ring-[#4A0E17]"
+                          />
+                          <span>Set immediately as the Active Primary Portal Adviser</span>
+                        </label>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200">
+                        <button
+                          type="button"
+                          onClick={() => setIsAddAdviserModalOpen(false)}
+                          className="px-4 py-2 text-xs font-semibold text-stone-600 bg-stone-100 hover:bg-stone-200 rounded transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 text-xs font-bold text-[#0B2545] bg-[#D4AF37] hover:bg-[#E5BE4A] rounded transition-colors shadow-xs"
+                        >
+                          Save & Appoint Portal Adviser
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* SHARED MODAL B: ADVISER RESIGNATION & PORTAL HANDOVER MODAL */}
+              {isResignModalOpen && (
+                <div className="fixed inset-0 z-50 bg-stone-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+                  <div className="bg-white rounded-xl shadow-2xl border border-stone-200 w-full max-w-xl overflow-hidden my-auto">
+                    <div className="bg-linear-to-r from-red-900 via-[#4A0E17] to-[#0B2545] text-white px-5 py-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <AlertTriangle className="w-5 h-5 text-[#F3C562]" />
+                        <div>
+                          <div className="text-[10px] font-bold uppercase tracking-widest text-[#F3C562]">
+                            Official Advisership Turnover Protocol
+                          </div>
+                          <h4 className="font-serif font-bold text-base">
+                            Resign as Portal Adviser & Appoint Successor
+                          </h4>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsResignModalOpen(false)}
+                        className="p-1 rounded text-stone-300 hover:text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleConfirmResignAndHandover} className="p-5 space-y-4 text-xs">
+                      {/* Step 1: Outgoing Adviser Status */}
+                      <div className="bg-stone-50 border border-stone-200 rounded-lg p-3.5 space-y-2">
+                        <div className="font-bold text-stone-900">
+                          1. Outgoing Portal Adviser: <span className="text-[#4A0E17]">{activeAdviserConfig.name}</span>
+                        </div>
+                        <p className="text-[11px] text-stone-600">
+                          How should {activeAdviserConfig.name}'s record appear on The Inkspirer Masthead Roster after stepping down?
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          <label
+                            className={`p-2.5 rounded border cursor-pointer flex items-start gap-2 transition-colors ${
+                              resignDisposition === 'emeritus'
+                                ? 'bg-amber-50 border-[#4A0E17] font-semibold text-stone-900'
+                                : 'bg-white border-stone-200 text-stone-600'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="resignDisposition"
+                              checked={resignDisposition === 'emeritus'}
+                              onChange={() => setResignDisposition('emeritus')}
+                              className="mt-0.5"
+                            />
+                            <span>
+                              Keep on Roster as <strong>Former Publication Adviser (Emeritus)</strong>
+                            </span>
+                          </label>
+                          <label
+                            className={`p-2.5 rounded border cursor-pointer flex items-start gap-2 transition-colors ${
+                              resignDisposition === 'removed'
+                                ? 'bg-red-50 border-red-600 font-semibold text-stone-900'
+                                : 'bg-white border-stone-200 text-stone-600'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="resignDisposition"
+                              checked={resignDisposition === 'removed'}
+                              onChange={() => setResignDisposition('removed')}
+                              className="mt-0.5"
+                            />
+                            <span>
+                              Remove completely from the active Masthead Roster
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Step 2: Incoming Portal Adviser Selection */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-stone-900">
+                            2. Designate Incoming Successor Portal Adviser *
+                          </span>
+                          <div className="inline-flex rounded border border-stone-300 overflow-hidden text-[11px]">
+                            <button
+                              type="button"
+                              onClick={() => setSuccessorMode('new')}
+                              className={`px-2.5 py-1 font-semibold ${
+                                successorMode === 'new'
+                                  ? 'bg-[#0B2545] text-white'
+                                  : 'bg-stone-100 text-stone-600'
+                              }`}
+                            >
+                              New Faculty Adviser
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSuccessorMode('existing')}
+                              className={`px-2.5 py-1 font-semibold ${
+                                successorMode === 'existing'
+                                  ? 'bg-[#0B2545] text-white'
+                                  : 'bg-stone-100 text-stone-600'
+                              }`}
+                            >
+                              From Existing Roster
+                            </button>
+                          </div>
+                        </div>
+
+                        {successorMode === 'existing' ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="sm:col-span-2">
+                              <label className="block font-semibold text-stone-700 mb-1">
+                                Select Roster Member to Promote as Portal Adviser
+                              </label>
+                              <select
+                                value={selectedExistingSuccessorId}
+                                onChange={(e) => setSelectedExistingSuccessorId(e.target.value)}
+                                className="w-full px-3 py-2 border border-stone-300 rounded bg-white font-medium"
+                              >
+                                {staff
+                                  .filter((m) => m.id !== activeAdviserConfig.id)
+                                  .map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.name} ({m.role} — {m.gradeOrDesignation})
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block font-semibold text-stone-700 mb-1">
+                                New Adviser Title
+                              </label>
+                              <input
+                                type="text"
+                                value={successorRole}
+                                onChange={(e) => setSuccessorRole(e.target.value)}
+                                className="w-full px-3 py-1.5 border border-stone-300 rounded"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold text-stone-700 mb-1">
+                                New Adviser Access PIN
+                              </label>
+                              <input
+                                type="text"
+                                value={successorPin}
+                                onChange={(e) => setSuccessorPin(e.target.value)}
+                                className="w-full px-3 py-1.5 border border-stone-300 rounded font-mono"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block font-semibold text-stone-700 mb-1">
+                                Successor Adviser Full Name *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={successorName}
+                                onChange={(e) => setSuccessorName(e.target.value)}
+                                placeholder="e.g., Mr. Roberto L. Villanueva"
+                                className="w-full px-3 py-1.5 border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold text-stone-700 mb-1">
+                                Official Email Address
+                              </label>
+                              <input
+                                type="email"
+                                value={successorEmail}
+                                onChange={(e) => setSuccessorEmail(e.target.value)}
+                                placeholder="e.g., r.villanueva@bnhs.deped.edu.ph"
+                                className="w-full px-3 py-1.5 border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold text-stone-700 mb-1">
+                                Faculty Rank / Designation *
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={successorDesignation}
+                                onChange={(e) => setSuccessorDesignation(e.target.value)}
+                                placeholder="e.g., Master Teacher I - Filipino Dept."
+                                className="w-full px-3 py-1.5 border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block font-semibold text-stone-700 mb-1">
+                                New Adviser Access PIN
+                              </label>
+                              <input
+                                type="text"
+                                value={successorPin}
+                                onChange={(e) => setSuccessorPin(e.target.value)}
+                                placeholder="1991"
+                                className="w-full px-3 py-1.5 border border-stone-300 rounded font-mono focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Step 3: Turnover Remarks */}
+                      <div>
+                        <label className="block font-bold text-stone-900 mb-1">
+                          3. Official Resignation & Turnover Note
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={resignReason}
+                          onChange={(e) => setResignReason(e.target.value)}
+                          className="w-full px-3 py-1.5 border border-stone-300 rounded focus:ring-1 focus:ring-[#0B2545] focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200">
+                        <button
+                          type="button"
+                          onClick={() => setIsResignModalOpen(false)}
+                          className="px-4 py-2 text-xs font-semibold text-stone-600 bg-stone-100 hover:bg-stone-200 rounded transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 text-xs font-bold text-white bg-red-700 hover:bg-red-800 rounded transition-colors shadow-xs"
+                        >
+                          Confirm Resignation & Transfer Advisership
+                        </button>
+                      </div>
+                    </form>
                   </div>
                 </div>
               )}

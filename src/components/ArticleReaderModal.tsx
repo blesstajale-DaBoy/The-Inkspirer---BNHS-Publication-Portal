@@ -13,7 +13,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import { Article } from '../types';
+import { Article, StudentAuthorProfile } from '../types';
 import { EditorialArtwork } from './EditorialArtwork';
 import { InkspirerLogo } from './InkspirerLogo';
 import { AuthorProfile } from './AuthorProfile';
@@ -26,6 +26,20 @@ interface ArticleReaderModalProps {
   onToggleBookmark: (id: string, e: React.MouseEvent) => void;
   isLiked: boolean;
   onToggleLike: (id: string, e: React.MouseEvent) => void;
+  savedProgress?: number;
+  onUpdateReadingProgress?: (id: string, progress: number) => void;
+  authorProfiles?: StudentAuthorProfile[];
+  articles?: Article[];
+  onSelectArticle?: (art: Article) => void;
+  onUpdateAuthorProfile?: (
+    id: string,
+    updated: Partial<StudentAuthorProfile>,
+    previousName?: string
+  ) => void;
+  onAddAuthorProfile?: (
+    profile: Omit<StudentAuthorProfile, 'id'>
+  ) => StudentAuthorProfile;
+  onOpenEditorialDeskAuthorTab?: (authorName?: string) => void;
 }
 
 export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
@@ -35,6 +49,14 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
   onToggleBookmark,
   isLiked,
   onToggleLike,
+  savedProgress = 0,
+  onUpdateReadingProgress,
+  authorProfiles = [],
+  articles = [],
+  onSelectArticle,
+  onUpdateAuthorProfile,
+  onAddAuthorProfile,
+  onOpenEditorialDeskAuthorTab,
 }) => {
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xl'>('normal');
   const [copiedShare, setCopiedShare] = useState(false);
@@ -43,10 +65,54 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
   const outerContainerRef = useRef<HTMLDivElement>(null);
   const articleBodyRef = useRef<HTMLDivElement>(null);
 
-  // Reset reading progress when opening a new article
+  // Reset or restore reading progress and scroll position when opening an article
   useEffect(() => {
-    setReadingProgress(0);
+    if (!article) return;
+    setReadingProgress(savedProgress > 0 && savedProgress < 100 ? savedProgress : 0);
+    if (articleBodyRef.current) {
+      articleBodyRef.current.scrollTop = 0;
+    }
+    if (outerContainerRef.current) {
+      outerContainerRef.current.scrollTop = 0;
+    }
+
+    // If user had unfinished progress (between 5% and 95%), smoothly scroll to where they left off
+    if (savedProgress >= 5 && savedProgress < 95) {
+      const timer = setTimeout(() => {
+        const el = articleBodyRef.current;
+        if (!el) return;
+        const maxScroll = el.scrollHeight - el.clientHeight;
+        if (maxScroll > 10) {
+          el.scrollTo({
+            top: (savedProgress / 100) * maxScroll,
+            behavior: 'smooth',
+          });
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
   }, [article?.id]);
+
+  // Recalculate progress when font size changes or window resizes
+  useEffect(() => {
+    const updateProgress = () => {
+      const el = articleBodyRef.current;
+      if (!el) return;
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if (maxScroll <= 5) {
+        setReadingProgress(100);
+      } else {
+        const progress = Math.min(100, Math.max(0, (el.scrollTop / maxScroll) * 100));
+        setReadingProgress(progress);
+      }
+    };
+    const timer = setTimeout(updateProgress, 60);
+    window.addEventListener('resize', updateProgress);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateProgress);
+    };
+  }, [article?.id, fontSize]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -63,13 +129,53 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
 
   if (!article) return null;
 
+  const matchedAuthorProfile =
+    authorProfiles.find(
+      (p) =>
+        (article.authorProfileId && p.id === article.authorProfileId) ||
+        p.name.trim().toLowerCase() === article.author.trim().toLowerCase()
+    ) || null;
+
+  const authorArticles = articles.filter(
+    (a) =>
+      (matchedAuthorProfile && a.authorProfileId === matchedAuthorProfile.id) ||
+      a.author.trim().toLowerCase() === article.author.trim().toLowerCase()
+  );
+
+  const contentString = Array.isArray(article.content) ? article.content.join(' ') : (article.content || '');
+  const totalWords = `${article.title || ''} ${article.deck || ''} ${contentString} ${article.pullQuote || ''}`
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+  const totalReadMinutes = Math.max(1, Math.ceil(totalWords / 200));
+  const remainingMinutes = Math.max(0, Math.ceil(totalReadMinutes * (1 - readingProgress / 100)));
+
   const handleScroll = (e: React.UIEvent<HTMLElement>) => {
     const target = e.currentTarget;
     const scrollTop = target.scrollTop;
     const maxScroll = target.scrollHeight - target.clientHeight;
-    if (maxScroll > 10) {
+    if (maxScroll > 5) {
       const progress = Math.min(100, Math.max(0, (scrollTop / maxScroll) * 100));
       setReadingProgress(progress);
+      onUpdateReadingProgress?.(article.id, progress);
+    } else {
+      setReadingProgress(100);
+      onUpdateReadingProgress?.(article.id, 100);
+    }
+  };
+
+  const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = articleBodyRef.current;
+    if (!el) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickRatio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    if (maxScroll > 0) {
+      el.scrollTo({
+        top: maxScroll * clickRatio,
+        behavior: 'smooth',
+      });
+      onUpdateReadingProgress?.(article.id, clickRatio * 100);
     }
   };
 
@@ -112,28 +218,31 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
   return (
     <div
       ref={outerContainerRef}
-      onScroll={handleScroll}
-      className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/80 backdrop-blur-xs flex justify-center p-0 sm:p-4 md:p-6"
+      className="fixed inset-0 z-50 overflow-hidden bg-stone-900/80 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 md:p-6"
     >
-      <div className="bg-[#FBF9F5] text-[#1C1917] w-full max-w-4xl min-h-screen sm:min-h-0 sm:rounded-lg shadow-2xl border border-stone-200 flex flex-col overflow-hidden my-auto relative">
-        {/* Scroll-Linked Reading Progress Bar Pinned at Top of Modal */}
+      <div className="bg-[#FBF9F5] text-[#1C1917] w-full max-w-4xl h-screen sm:h-auto sm:max-h-[92vh] sm:rounded-lg shadow-2xl border border-stone-200 flex flex-col overflow-hidden relative">
+        {/* Scroll-Based Reading Progress Bar Pinned at the Top of ArticleReaderModal */}
         <div
-          className="sticky top-0 left-0 right-0 z-30 w-full h-1.5 sm:h-2 bg-stone-200/90 overflow-hidden shadow-inner"
+          onClick={handleProgressBarClick}
+          className="shrink-0 w-full h-2.5 bg-[#34070E]/15 hover:h-3 transition-all cursor-pointer relative overflow-hidden group"
           role="progressbar"
+          aria-label="Editorial reading progress"
           aria-valuenow={Math.round(readingProgress)}
           aria-valuemin={0}
           aria-valuemax={100}
-          title={`Reading progress: ${Math.round(readingProgress)}%`}
+          title={`Reading progress: ${Math.round(readingProgress)}% — Click anywhere on the bar to jump`}
         >
           <div
-            className="h-full bg-linear-to-r from-[#D4AF37] via-[#FB923C] to-[#781423] transition-[width] duration-150 ease-out rounded-r-full shadow-xs"
+            className="h-full bg-linear-to-r from-[#4A0E17] via-[#991B1B] to-[#D4AF37] transition-[width] duration-100 ease-out relative"
             style={{ width: `${readingProgress}%` }}
-          />
+          >
+            <span className="absolute right-0 top-0 bottom-0 w-2 bg-[#F3C562] shadow-[0_0_8px_#D4AF37] rounded-full" />
+          </div>
         </div>
 
-        {/* Sticky Utility Header */}
-        <div className="sticky top-1.5 sm:top-2 z-20 bg-white/95 backdrop-blur-sm border-b border-stone-200 px-6 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5 text-xs text-stone-500 truncate">
+        {/* Pinned Utility Header */}
+        <div className="shrink-0 z-20 bg-white/95 backdrop-blur-sm border-b border-stone-200 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-stone-500 truncate">
             {/* BNHS Logo & Inkspirer Emblem */}
             <img
               src="/assets/aistudio/BNHS_LOGO_29bb7e4c.jpg"
@@ -146,17 +255,39 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
             </span>
             <span className="hidden sm:inline" aria-hidden="true">·</span>
             <span className="font-semibold text-[#133E87]">{article.category} Desk</span>
-            <span aria-hidden="true">·</span>
+            <span className="hidden md:inline" aria-hidden="true">·</span>
             <span className="truncate hidden md:inline">{article.issue}</span>
 
-            {/* Reading progress badge in header */}
-            <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-stone-100 text-[#4A0E17] border border-stone-200 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]" />
-              <span>{Math.round(readingProgress)}%</span>
+            {/* Live Scroll Reading Progress Indicator Pill */}
+            <span
+              className={`ml-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border transition-colors shrink-0 tabular-nums ${
+                readingProgress >= 98
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-[#4A0E17]/5 text-[#4A0E17] border-[#4A0E17]/20'
+              }`}
+              title={
+                readingProgress >= 98
+                  ? 'Editorial completed!'
+                  : `${Math.round(readingProgress)}% through this editorial (${remainingMinutes} min left)`
+              }
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  readingProgress >= 98 ? 'bg-emerald-500' : 'bg-[#D4AF37]'
+                }`}
+              />
+              <span>
+                {readingProgress >= 98 ? '100% · Finished' : `${Math.round(readingProgress)}% read`}
+              </span>
+              {readingProgress > 0 && readingProgress < 98 && (
+                <span className="hidden lg:inline text-stone-500 font-normal">
+                  · {remainingMinutes}m left
+                </span>
+              )}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Font Size Selector */}
             <div className="hidden sm:flex items-center bg-stone-100 rounded border border-stone-200 p-0.5 text-xs text-stone-700">
               <button
@@ -252,43 +383,39 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
         <div
           ref={articleBodyRef}
           onScroll={handleScroll}
-          className="p-6 sm:p-10 lg:p-12 overflow-y-auto max-w-3xl mx-auto w-full"
+          className="flex-1 overflow-y-auto scroll-smooth"
         >
+          <div className="p-6 sm:p-10 lg:p-12 max-w-3xl mx-auto w-full">
           {/* Category & Date Metadata Header */}
-          {(() => {
-            const contentString = Array.isArray(article.content) ? article.content.join(' ') : (article.content || '');
-            const totalWords = `${article.title || ''} ${article.deck || ''} ${contentString} ${article.pullQuote || ''}`
-              .trim()
-              .split(/\s+/)
-              .filter(Boolean).length;
-            const calculatedMinutes = Math.max(1, Math.ceil(totalWords / 200));
-            const calculatedReadTime = `${calculatedMinutes} min read`;
-
-            return (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 mb-3">
-                <span className="font-bold uppercase tracking-wider text-[#133E87]">
-                  {article.category}
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>Published {article.date}</span>
-                <span aria-hidden="true">·</span>
-                <span className="flex items-center gap-1 font-medium text-stone-700">
-                  <Clock className="w-3.5 h-3.5 text-stone-400" />
-                  <span>{calculatedReadTime}</span>
-                </span>
-                <span aria-hidden="true">·</span>
-                <span className="tabular-nums">{article.views} views</span>
-              </div>
-            );
-          })()}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 mb-3">
+            <span className="font-bold uppercase tracking-wider text-[#133E87]">
+              {article.category}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>Published {article.date}</span>
+            <span aria-hidden="true">·</span>
+            <span className="tabular-nums">{article.views} views</span>
+          </div>
 
           {/* Headline */}
           <h1
-            className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-900 leading-[1.2] tracking-tight mb-4"
+            className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-900 leading-[1.2] tracking-tight mb-3"
             style={{ textWrap: 'balance' }}
           >
             {article.title}
           </h1>
+
+          {/* Estimated Reading Time Based on Word Count (Right Below Article Title) */}
+          <div className="flex flex-wrap items-center gap-2.5 mb-5 text-xs sm:text-sm text-stone-600">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#4A0E17]/8 text-[#4A0E17] border border-[#4A0E17]/15 font-semibold">
+              <Clock className="w-3.5 h-3.5 text-[#781423]" />
+              <span>{totalReadMinutes} min read</span>
+            </div>
+            <span aria-hidden="true" className="text-stone-400">·</span>
+            <span className="text-xs font-medium text-stone-500 tabular-nums">
+              {totalWords.toLocaleString()} words (calculated at 200 wpm)
+            </span>
+          </div>
 
           {/* Subtitle / Deck */}
           <p className="font-sans text-lg sm:text-xl text-stone-600 leading-relaxed mb-6 font-normal">
@@ -301,6 +428,11 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
               author={article.author}
               role={article.authorRole}
               bio={article.authorBio}
+              photoUrl={article.authorPhotoUrl}
+              gradeSection={article.authorGradeSection}
+              journalismMotto={article.authorMotto}
+              accolades={article.authorAccolades}
+              profile={matchedAuthorProfile}
               variant="reader-header"
             />
 
@@ -361,11 +493,22 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
 
           {/* Article Footer & Full Author Editorial Profile */}
           <div className="mt-12 pt-8 border-t border-stone-300 space-y-6">
-            {/* Dedicated Author Editorial Card */}
+            {/* Dedicated Student Journalist Author Bio Profile Section */}
             <AuthorProfile
               author={article.author}
               role={article.authorRole}
               bio={article.authorBio}
+              photoUrl={article.authorPhotoUrl}
+              gradeSection={article.authorGradeSection}
+              journalismMotto={article.authorMotto}
+              accolades={article.authorAccolades}
+              profile={matchedAuthorProfile}
+              authorArticles={authorArticles}
+              currentArticleId={article.id}
+              onSelectArticle={onSelectArticle}
+              onUpdateAuthorProfile={onUpdateAuthorProfile}
+              onAddAuthorProfile={onAddAuthorProfile}
+              onOpenEditorialDeskAuthorTab={onOpenEditorialDeskAuthorTab}
               variant="reader-card"
             />
 
@@ -412,6 +555,7 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
 
             {/* Reader Comments & Interactive Community Discussion */}
             <ArticleComments articleId={article.id} articleTitle={article.title} />
+          </div>
           </div>
         </div>
       </div>
