@@ -54,7 +54,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           className="flex items-center gap-2 sm:gap-2.5 font-brand text-base sm:text-xl font-bold tracking-tight text-[#F3C562] hover:text-[#D4AF37] transition-colors whitespace-nowrap shrink-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] group cursor-pointer"
         >
           <img
-            src="/assets/aistudio/BNHS_LOGO_29bb7e4c.jpg"
+            src={`${import.meta.env.BASE_URL}assets/aistudio/BNHS_LOGO_29bb7e4c.jpg`}
             alt="BNHS Logo"
             className="w-7 h-7 sm:w-8 sm:h-8 object-contain rounded-full border border-[#D4AF37]/80 shadow-xs group-hover:scale-105 transition-transform"
           />

@@ -36,7 +36,7 @@ export const InkspirerLogo: React.FC<InkspirerLogoProps> = ({
         }`}
       >
         <img
-          src="/assets/aistudio/inkspirer_logo_6a2deb81.png"
+          src={`${import.meta.env.BASE_URL}assets/aistudio/inkspirer_logo_6a2deb81.png`}
           alt="The Inkspirer - Official Publication Logo"
           className={`w-full h-full object-contain ${imageSizeClasses[size]}`}
           loading="eager"

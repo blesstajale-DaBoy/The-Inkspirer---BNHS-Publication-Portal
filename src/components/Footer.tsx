@@ -31,7 +31,7 @@ export const Footer: React.FC<FooterProps> = ({
           <div className="md:col-span-5 space-y-3">
             <div className="flex items-center gap-3 mb-2">
               <img
-                src="/assets/aistudio/BNHS_LOGO_29bb7e4c.jpg"
+                src={`${import.meta.env.BASE_URL}assets/aistudio/BNHS_LOGO_29bb7e4c.jpg`}
                 alt="Barobo National High School Seal"
                 className="w-11 h-11 object-contain rounded-full border border-[#D4AF37]/80 bg-white/5 p-0.5 shadow-md"
               />

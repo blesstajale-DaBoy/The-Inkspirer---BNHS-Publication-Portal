@@ -245,7 +245,7 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
           <div className="flex items-center gap-2 text-xs text-stone-500 truncate">
             {/* BNHS Logo & Inkspirer Emblem */}
             <img
-              src="/assets/aistudio/BNHS_LOGO_29bb7e4c.jpg"
+              src={`${import.meta.env.BASE_URL}assets/aistudio/BNHS_LOGO_29bb7e4c.jpg`}
               alt="BNHS Logo"
               className="w-5 h-5 object-contain rounded-full border border-[#D4AF37]/80 shrink-0"
             />

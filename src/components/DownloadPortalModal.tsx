@@ -42,7 +42,7 @@ export const DownloadPortalModal: React.FC<DownloadPortalModalProps> = ({
         <div className="bg-[#4A0E17] text-white p-6 flex items-start justify-between border-b border-[#6B1420]">
           <div className="flex items-center gap-3">
             <img
-              src="/assets/aistudio/BNHS_LOGO_29bb7e4c.jpg"
+              src={`${import.meta.env.BASE_URL}assets/aistudio/BNHS_LOGO_29bb7e4c.jpg`}
               alt="BNHS Logo"
               className="w-12 h-12 object-contain rounded-full border border-[#D4AF37]/80 bg-white/10 p-0.5 shadow-md"
             />

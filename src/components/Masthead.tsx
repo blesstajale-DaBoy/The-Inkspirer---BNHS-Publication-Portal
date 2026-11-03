@@ -101,7 +101,7 @@ export const Masthead: React.FC<MastheadProps> = ({
         <div className="flex flex-col items-center justify-center mb-3">
           <div className="relative group p-1 rounded-full bg-white/10 backdrop-blur-xs border-2 border-[#D4AF37]/80 shadow-2xl hover:border-[#F3C562] transition-all">
             <img
-              src="/assets/aistudio/BNHS_LOGO_29bb7e4c.jpg"
+              src={`${import.meta.env.BASE_URL}assets/aistudio/BNHS_LOGO_29bb7e4c.jpg`}
               alt="Barobo National High School Official Seal"
               className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 object-contain rounded-full shadow-inner transform group-hover:scale-105 transition-transform duration-300"
               loading="eager"
