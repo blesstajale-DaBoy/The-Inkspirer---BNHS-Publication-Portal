@@ -1159,32 +1159,75 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/80 backdrop-blur-xs flex justify-center p-2 sm:p-4 md:p-6">
-      <div className="bg-white text-[#1C1917] w-full max-w-5xl rounded-lg shadow-2xl border border-stone-200 flex flex-col overflow-hidden my-auto max-h-[92vh]">
+      <div className="bg-white text-[#1C1917] w-full max-w-6xl rounded-lg shadow-2xl border border-stone-200 flex flex-col overflow-hidden my-auto max-h-[94vh]">
         {/* Header Strip */}
-        <div className="bg-[#0B2545] text-white px-6 py-4 flex items-center justify-between border-b border-[#07192F]">
+        <div className="bg-[#0B2545] text-white px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 border-b border-[#07192F] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded bg-[#D4AF37]/20 flex items-center justify-center text-[#D4AF37]">
+            <div className="w-9 h-9 rounded bg-[#D4AF37]/20 flex items-center justify-center text-[#D4AF37] shrink-0">
               <Shield className="w-5 h-5" />
             </div>
             <div>
               <div className="text-[10px] font-bold tracking-widest uppercase text-[#D4AF37]">
                 Barobo National High School · Publication Office
               </div>
-              <h2 className="font-brand text-xl font-bold tracking-tight">
-                The Inkspirer Editorial Desk & Management Portal
+              <h2 className="font-brand text-lg sm:text-xl font-bold tracking-tight">
+                The Inkspirer Editorial &amp; Category Desk Portal
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {deskToast && (
-              <span className="hidden sm:inline-block text-xs bg-emerald-700/80 text-white px-2.5 py-1 rounded">
+              <span className="text-xs bg-emerald-700/90 text-white px-2.5 py-1 rounded font-medium shadow-xs">
                 {deskToast}
               </span>
             )}
+
+            {isAuthenticated && userProfile && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/10 border border-white/20 rounded text-xs text-white">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                <span className="font-semibold text-white truncate max-w-[140px]">
+                  {userProfile.displayName}
+                </span>
+                <span className="text-[10px] uppercase font-bold text-[#0B2545] px-1.5 py-0.2 bg-[#D4AF37] rounded">
+                  {userProfile.role === 'adviser' ? 'Adviser' : 'Editor'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    setIsPinUnlocked(false);
+                    showToast('Signed out of Editorial Desk');
+                  }}
+                  className="ml-1 text-[11px] text-amber-300 hover:text-white hover:underline font-medium cursor-pointer"
+                  title="Sign Out or switch accounts"
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
+
+            {isAuthenticated && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Reset all stories, submissions, and notices back to initial demo state?')) {
+                    onResetDefaults();
+                    showToast('Database reset to official default state');
+                  }
+                }}
+                className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 border border-white/15 text-stone-200 hover:text-white text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                title="Reset sample data"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Reset Demo</span>
+              </button>
+            )}
+
             <button
               onClick={onClose}
-              className="p-1 rounded text-stone-300 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-1.5 rounded text-stone-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Close Desk Modal"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1277,162 +1320,232 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
           </div>
         ) : (
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Navigation Tabs Bar */}
-            <div className="bg-[#FBF9F5] border-b border-stone-200 px-6 flex items-center justify-between overflow-x-auto gap-2">
-              <div className="flex items-center gap-1 py-2">
+            {/* Always-Visible Navigation Menu Grid (Never Hidden or Clipped Off-Screen) */}
+            <div className="bg-[#FBF9F5] border-b border-stone-200 px-4 sm:px-6 py-2.5 shrink-0">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                  Editorial &amp; Category Desk Navigation Menu — Click Any Section to Access Directly
+                </span>
+                <span className="text-[10px] font-semibold text-[#0B2545] hidden sm:inline">
+                  9 Management Modules Active
+                </span>
+              </div>
+              <nav
+                aria-label="Editorial and Category Desk Navigation"
+                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5"
+              >
                 <button
+                  type="button"
                   onClick={() => setActiveTab('submissions')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3 py-2 text-xs font-medium rounded-md border transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
                     activeTab === 'submissions'
-                      ? 'bg-[#0B2545] text-white font-semibold'
-                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200'
+                      ? 'bg-[#0B2545] text-white border-[#0B2545] font-semibold shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-200 hover:text-stone-900 hover:bg-stone-100 hover:border-stone-300'
                   }`}
                 >
-                  <FileCheck className="w-3.5 h-3.5" />
-                  <span>Submissions Queue</span>
-                  {pendingCount > 0 && (
-                    <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[#D4AF37] text-stone-900">
-                      {pendingCount}
-                    </span>
-                  )}
+                  <span className="flex items-center gap-1.5 truncate">
+                    <FileCheck className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Submissions Queue</span>
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                      pendingCount > 0
+                        ? 'bg-[#D4AF37] text-stone-900'
+                        : activeTab === 'submissions'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {pendingCount}
+                  </span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => setActiveTab('compose')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3 py-2 text-xs font-medium rounded-md border transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
                     activeTab === 'compose'
-                      ? 'bg-[#0B2545] text-white font-semibold'
-                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200'
+                      ? 'bg-[#0B2545] text-white border-[#0B2545] font-semibold shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-200 hover:text-stone-900 hover:bg-stone-100 hover:border-stone-300'
                   }`}
                 >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>Publish New Story</span>
+                  <span className="flex items-center gap-1.5 truncate">
+                    <PlusCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Publish New Story</span>
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-bold shrink-0 ${
+                      activeTab === 'compose'
+                        ? 'bg-[#D4AF37] text-stone-900'
+                        : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    }`}
+                  >
+                    + New
+                  </span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => setActiveTab('articles')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3 py-2 text-xs font-medium rounded-md border transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
                     activeTab === 'articles'
-                      ? 'bg-[#0B2545] text-white font-semibold'
-                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200'
+                      ? 'bg-[#0B2545] text-white border-[#0B2545] font-semibold shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-200 hover:text-stone-900 hover:bg-stone-100 hover:border-stone-300'
                   }`}
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Live Articles ({articles.length})</span>
+                  <span className="flex items-center gap-1.5 truncate">
+                    <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Live Articles</span>
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                      activeTab === 'articles'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {articles.length}
+                  </span>
                 </button>
 
                 <button
-                  onClick={() => setActiveTab('announcements')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                    activeTab === 'announcements'
-                      ? 'bg-[#0B2545] text-white font-semibold'
-                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200'
-                  }`}
-                >
-                  <Megaphone className="w-3.5 h-3.5" />
-                  <span>Announcements ({announcements.length})</span>
-                </button>
-
-                <button
+                  type="button"
                   onClick={() => setActiveTab('categories')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3 py-2 text-xs font-medium rounded-md border transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
                     activeTab === 'categories'
-                      ? 'bg-[#0B2545] text-white font-semibold'
-                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200'
+                      ? 'bg-[#0B2545] text-white border-[#0B2545] font-semibold shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-200 hover:text-stone-900 hover:bg-stone-100 hover:border-stone-300'
                   }`}
                 >
-                  <Tags className="w-3.5 h-3.5" />
-                  <span>Category Management ({categories.length})</span>
+                  <span className="flex items-center gap-1.5 truncate">
+                    <Tags className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Category Management</span>
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                      activeTab === 'categories'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {categories.length}
+                  </span>
                 </button>
 
                 <button
+                  type="button"
+                  onClick={() => setActiveTab('announcements')}
+                  className={`px-3 py-2 text-xs font-medium rounded-md border transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
+                    activeTab === 'announcements'
+                      ? 'bg-[#0B2545] text-white border-[#0B2545] font-semibold shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-200 hover:text-stone-900 hover:bg-stone-100 hover:border-stone-300'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 truncate">
+                    <Megaphone className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Announcements</span>
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                      activeTab === 'announcements'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {announcements.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setActiveTab('staff')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3 py-2 text-xs font-medium rounded-md border transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
                     activeTab === 'staff'
-                      ? 'bg-[#0B2545] text-white font-semibold'
-                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200'
+                      ? 'bg-[#0B2545] text-white border-[#0B2545] font-semibold shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-200 hover:text-stone-900 hover:bg-stone-100 hover:border-stone-300'
                   }`}
                 >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Editorial Board Staff ({staff.length})</span>
+                  <span className="flex items-center gap-1.5 truncate">
+                    <Users className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Editorial Board Staff</span>
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                      activeTab === 'staff'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {staff.length}
+                  </span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => setActiveTab('author-bios')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3 py-2 text-xs font-medium rounded-md border transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
                     activeTab === 'author-bios'
-                      ? 'bg-[#0B2545] text-white font-semibold'
-                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200'
+                      ? 'bg-[#0B2545] text-white border-[#0B2545] font-semibold shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-200 hover:text-stone-900 hover:bg-stone-100 hover:border-stone-300'
                   }`}
                 >
-                  <Feather className="w-3.5 h-3.5" />
-                  <span>Author Bio Profiles ({authorProfiles.length})</span>
+                  <span className="flex items-center gap-1.5 truncate">
+                    <Feather className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Author Bio Profiles</span>
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                      activeTab === 'author-bios'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {authorProfiles.length}
+                  </span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => setActiveTab('adviser')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3 py-2 text-xs font-medium rounded-md border transition-all flex items-center justify-between gap-1.5 cursor-pointer ${
                     activeTab === 'adviser'
-                      ? 'bg-[#4A0E17] text-[#F3C562] font-semibold border border-[#D4AF37]/50'
-                      : 'text-[#4A0E17] bg-amber-50/70 hover:bg-amber-100/80 border border-amber-200/80 font-semibold'
+                      ? 'bg-[#4A0E17] text-[#F3C562] font-semibold border-[#D4AF37] shadow-xs'
+                      : 'text-[#4A0E17] bg-amber-50/80 hover:bg-amber-100 border-amber-300/80 font-semibold'
                   }`}
                 >
-                  <Shield className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  <span>Portal Adviser & Resignation</span>
+                  <span className="flex items-center gap-1.5 truncate">
+                    <Shield className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+                    <span className="truncate">Portal Adviser &amp; Resign</span>
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#4A0E17]/15 text-[#4A0E17] shrink-0">
+                    Admin
+                  </span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => setActiveTab('subscribers')}
-                  className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3 py-2 text-xs font-medium rounded-md border transition-all flex items-center justify-between gap-1.5 cursor-pointer sm:col-span-1 col-span-2 ${
                     activeTab === 'subscribers'
-                      ? 'bg-[#0B2545] text-white font-semibold'
-                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200'
+                      ? 'bg-[#0B2545] text-white border-[#0B2545] font-semibold shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-200 hover:text-stone-900 hover:bg-stone-100 hover:border-stone-300'
                   }`}
                 >
-                  <Mail className="w-3.5 h-3.5" />
-                  <span>Newsletter Subscribers ({subscribersList.length + 342})</span>
+                  <span className="flex items-center gap-1.5 truncate">
+                    <Mail className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Subscribers</span>
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                      activeTab === 'subscribers'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {subscribersList.length + 342}
+                  </span>
                 </button>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0 py-2">
-                {userProfile && (
-                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-stone-100 border border-stone-300 rounded text-xs text-stone-800">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="font-semibold text-stone-900 truncate max-w-[150px]">
-                      {userProfile.displayName}
-                    </span>
-                    <span className="text-[10px] uppercase font-bold text-stone-500 px-1 py-0.2 bg-stone-200 rounded">
-                      {userProfile.role === 'adviser' ? 'Adviser' : 'Editor'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        logout();
-                        setIsPinUnlocked(false);
-                        showToast('Signed out of Editorial Desk');
-                      }}
-                      className="ml-1 text-[11px] text-red-700 hover:underline font-medium"
-                      title="Sign Out or switch accounts"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
-                )}
-
-                <button
-                  onClick={() => {
-                    if (confirm('Reset all stories, submissions, and notices back to initial demo state?')) {
-                      onResetDefaults();
-                      showToast('Database reset to official default state');
-                    }
-                  }}
-                  className="p-1.5 rounded text-stone-500 hover:text-stone-800 hover:bg-stone-200 text-xs flex items-center gap-1 transition-colors"
-                  title="Reset sample data"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Reset Demo</span>
-                </button>
-              </div>
+              </nav>
             </div>
 
             {/* TAB BODY */}
@@ -1958,31 +2071,42 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 pb-3">
                     <div>
                       <h3 className="font-serif text-xl font-bold text-stone-900">
-                        Manage Published Articles & Categories
+                        Manage Published Articles &amp; Categories
                       </h3>
                       <p className="text-xs text-stone-500">
                         Create, edit, update, delete stories, change publication categories, and upload/replace story photos.
                       </p>
                     </div>
-                    <button
-                      onClick={() => setActiveTab('compose')}
-                      className="px-3.5 py-2 text-xs font-semibold text-white bg-[#0B2545] hover:bg-[#133E87] rounded transition-colors flex items-center gap-1.5 shrink-0 shadow-xs"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      <span>Create New Story</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('categories')}
+                        className="px-3 py-2 text-xs font-semibold text-[#0B2545] bg-white hover:bg-stone-100 border border-[#0B2545]/30 rounded transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      >
+                        <Tags className="w-3.5 h-3.5" />
+                        <span>Manage Categories ({categories.length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('compose')}
+                        className="px-3.5 py-2 text-xs font-semibold text-white bg-[#0B2545] hover:bg-[#133E87] rounded transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        <span>Create New Story</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Filter & Search Bar */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-stone-50 p-2.5 rounded-lg border border-stone-200">
-                    <div className="flex items-center gap-1 overflow-x-auto">
+                  {/* Filter & Search Bar (Wrapping so no category filter ever hides) */}
+                  <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-stone-50 p-3 rounded-lg border border-stone-200">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => setArticleCategoryFilter('All')}
-                        className={`px-3 py-1 text-xs rounded font-medium transition-colors whitespace-nowrap ${
+                        className={`px-3 py-1.5 text-xs rounded font-medium transition-colors whitespace-nowrap cursor-pointer ${
                           articleCategoryFilter === 'All'
-                            ? 'bg-[#0B2545] text-white font-semibold'
-                            : 'text-stone-600 hover:bg-stone-200'
+                            ? 'bg-[#0B2545] text-white font-semibold shadow-2xs'
+                            : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-200'
                         }`}
                       >
                         <span>All</span>
@@ -1997,14 +2121,14 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
                             key={cat.id}
                             type="button"
                             onClick={() => setArticleCategoryFilter(cat.name)}
-                            className={`px-3 py-1 text-xs rounded font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                            className={`px-3 py-1.5 text-xs rounded font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
                               articleCategoryFilter.toLowerCase() === cat.name.toLowerCase()
-                                ? 'bg-[#0B2545] text-white font-semibold'
-                                : 'text-stone-600 hover:bg-stone-200'
+                                ? 'bg-[#0B2545] text-white font-semibold shadow-2xs'
+                                : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-200'
                             }`}
                           >
                             <span
-                              className="w-1.5 h-1.5 rounded-full"
+                              className="w-2 h-2 rounded-full shrink-0"
                               style={{ backgroundColor: cat.color }}
                             />
                             <span>{cat.name}</span>
@@ -2019,7 +2143,7 @@ export const EditorialDeskModal: React.FC<EditorialDeskModalProps> = ({
                       value={articleSearchQuery}
                       onChange={(e) => setArticleSearchQuery(e.target.value)}
                       placeholder="Search title or author..."
-                      className="px-3 py-1 text-xs border border-stone-300 rounded bg-white text-stone-800 focus:outline-none focus:ring-1 focus:ring-[#0B2545] w-full sm:w-56"
+                      className="px-3 py-1.5 text-xs border border-stone-300 rounded bg-white text-stone-800 focus:outline-none focus:ring-1 focus:ring-[#0B2545] w-full md:w-56 shrink-0"
                     />
                   </div>
 
